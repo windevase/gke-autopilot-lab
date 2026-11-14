@@ -78,7 +78,7 @@ flowchart LR
 | 클러스터 | GKE Autopilot, us-central1, REGULAR 채널. 모든 워크로드는 **Spot Pod** |
 | 모니터링 | kube-prometheus-stack (Prometheus, Grafana, kube-state-metrics). Alertmanager와 기본 대시보드·규칙은 제거 |
 | 고가용성 | Prometheus 2대(서로 다른 Spot 노드) + Thanos Query로 병합·중복 제거 → Spot 회수 1건으로는 수집 공백 없음 |
-| 대시보드 | 직접 만든 8종 (아래 표) |
+| 대시보드 | 직접 만든 9종 (아래 표) |
 | 외부 공개 | Cloudflare Tunnel (공인 IP·로드밸런서 없음) |
 | 비용 보호 | 예산 초과 시 워크로드를 자동으로 0으로 내리는 kill switch (월 1회 자가 점검) |
 | GitOps | Argo CD App of Apps. 관리자 PC IP + Google 로그인 + RBAC 승인제 |
@@ -103,6 +103,7 @@ flowchart LR
 | **Argo CD (GitOps)** | Prometheus | 앱별 Sync/Health 현재 상태·타임라인, 동기화 횟수·결과·소요 시간, reconcile 시간, 컨트롤러 캐시 객체 수(메모리와 직결), Git 요청, 리소스·재시작·OOM |
 | **Terraform CI/CD** | Prometheus + GitHub | 사후·교차 감사 마지막 결과, Atlantis 가동 시간·비용(7일), plan·apply 실행 결과(24시간), PR 리드타임, 워크플로 결과, 정책 위반 이슈 |
 | **GitHub 사용량** | GitHub REST (Infinity) | GitHub Free 무료 한도 대비 Actions 분(Linux 환산)·저장 공간(GB-시간)·월말 예상·청구 예정, 캐시, API 요청 한도 |
+| **OpenBao (임시 자격 발급)** | Prometheus | 봉인 상태·가동 시간, 인증 방식별 로그인(AppRole·OIDC)·AppRole 로그인 실패(추정), AWS STS 발급·살아 있는 자격, 경로별 요청·처리 시간, 감사 로그 실패, Raft·리소스 (필요할 때만 가동 → 꺼진 시간은 비어 있음) |
 
 ## Dashboard as Code
 
@@ -236,6 +237,7 @@ OpenBao 는 **역할을 붙일 수 없는 곳**(온프레미스 서버, 담당�
 | 외부 경로 | 같은 Cloudflare Tunnel 의 `bao.*` + WAF(관리자 PC IP 만) + NetworkPolicy(cloudflared → 8200 만) |
 | 플러그인 | OpenBao 2.x 는 AWS 엔진이 내장이 아님 → 공식 플러그인을 설정에 **digest 고정**으로 선언(기동 때 다운로드, 실패 시 기동 실패) |
 | 감사 | 설정에 선언(API 로 끌 수 없음), 모든 요청을 실제 호출자 IP 와 함께 파드 로그로 |
+| 관측 | Prometheus 지표(ServiceMonitor, 대시보드가 쓰는 29개만 keep) → 전용 대시보드 **OpenBao (임시 자격 발급)**. 지표 경로만 토큰 없이, NetworkPolicy 로 Prometheus 만 |
 | 권한 | 서버용 AppRole 은 필요한 권한만(시범: S3 읽기), 관리자 STS 는 사람 OIDC 로그인에만. 루트 토큰은 초기 설정 후 폐기 |
 | 검증 | 키 없이 STS 발급·호출, 권한 밖 동작 거부, 래핑 토큰 재사용 거부, 다른 주소에서 AppRole 로그인 거부, `aws` 10회 → 발급 1회(캐시) |
 

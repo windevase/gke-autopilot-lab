@@ -101,6 +101,16 @@ server:
                 app.kubernetes.io/name: cloudflared
         ports:
           - { port: 8200, protocol: TCP }
+      # 8200 지표(/v1/sys/metrics): monitoring 의 Prometheus 수집만
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: monitoring
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: prometheus
+        ports:
+          - { port: 8200, protocol: TCP }
       # 8201: Raft 클러스터 통신(자기 자신·이후 증설 대비)
       - from:
           - podSelector:
@@ -132,6 +142,17 @@ server:
           # 감사 로그에 실제 호출자 IP — cloudflared(파드 대역)가 붙인 X-Forwarded-For 만 신뢰
           x_forwarded_for_authorized_addrs = "10.20.0.0/16"
           x_forwarded_for_reject_not_present = false
+          # 지표 경로만 토큰 없이 — 도달은 NetworkPolicy 로 Prometheus 만(외부 터널 경로는 WAF 로 관리자 PC 만)
+          telemetry {
+            unauthenticated_metrics_access = true
+          }
+        }
+
+        # Prometheus 지표 (Grafana 대시보드 lab-openbao). 호스트 이름 접두어 없이
+        telemetry {
+          # 카운터를 갱신이 없어도 유지(짧으면 조용한 동안 지표가 사라져 increase() 가 끊김). 파드가 꺼지면 어차피 0부터
+          prometheus_retention_time = "24h"
+          disable_hostname          = true
         }
 
         storage "raft" {
@@ -173,3 +194,34 @@ server:
   serviceAccount:
     create: true
     name: openbao
+
+# Prometheus 수집 — 차트 ServiceMonitor 는 지표 선별(metricRelabelings)을 지원하지 않아 직접 정의
+# 평소 꺼져 있어(필요할 때만 가동) 켜 둔 동안의 지표만 쌓인다(Prometheus 7일 보존)
+# ServiceMonitor 추가·변경은 Prometheus Operator 를 잠깐 켜야 반영(평소 replicas 0)
+extraObjects:
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: openbao
+      namespace: openbao
+    spec:
+      selector:
+        matchLabels:
+          app.kubernetes.io/name: openbao
+          app.kubernetes.io/instance: openbao
+          openbao-active: "true"
+      endpoints:
+        - port: http
+          scheme: http
+          path: /v1/sys/metrics
+          params:
+            format: [prometheus]
+          interval: 30s
+          scrapeTimeout: 10s
+          metricRelabelings:
+            # 대시보드(lab-openbao, gen_openbao_dashboard.py)가 쓰는 지표만 keep — 새 패널에 지표가 필요하면 여기에도 추가
+            - sourceLabels: [__name__]
+              action: keep
+              regex: 'vault_core_(unsealed|active)|vault_autopilot_healthy|vault_raft_peers|vault_token_creation|vault_secret_lease_creation|vault_expire_num_leases|vault_expire_revoke_count|vault_route_.+_count|vault_core_handle_(login_)?request_(sum|count)|vault_audit_log_request_count|vault_audit_log_(request|response)_failure'
+            # 카운터 이름에 _total 부여 — Prometheus 3 은 _total 없는 지표에 increase() 를 쓰면 "카운터가 아닐 수 있음" 안내
+            - { sourceLabels: [__name__], action: replace, regex: '(vault_token_creation|vault_secret_lease_creation|vault_audit_log_(request|response)_failure)', targetLabel: __name__, replacement: '${1}_total' }
