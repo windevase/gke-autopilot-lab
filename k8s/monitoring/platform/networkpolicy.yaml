@@ -1,0 +1,78 @@
+# monitoring 네임스페이스 네트워크 정책 (GKE Autopilot Dataplane V2가 기본 적용)
+# - 기본: 모든 인바운드 차단
+# - Grafana: cloudflared(Cloudflare Tunnel)에서만 3000 허용 (외부 공개 경로는 터널 하나뿐)
+# - Prometheus: Grafana(데이터소스 조회·Thanos Query)와 Prometheus 자신(self-scrape)만 9090/8080/10901 허용 → 내부 전용
+# - kube-state-metrics / Operator: Prometheus의 수집만 허용
+# ※ kubectl port-forward는 kubelet 경유라 NetworkPolicy 영향 없음
+# ※ apiserver 프록시(kubectl get --raw .../proxy)로 Prometheus 직접 조회는 차단됨 → Grafana 경유로 조회
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-from-cloudflared
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudflared
+      ports:
+        - { protocol: TCP, port: 3000 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-from-grafana-only
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grafana
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - { protocol: TCP, port: 9090 }
+        - { protocol: TCP, port: 8080 } # config-reloader 지표
+        - { protocol: TCP, port: 10901 } # Thanos sidecar gRPC (Grafana 파드의 Thanos Query → sidecar)
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: exporters-from-prometheus-only
+  namespace: monitoring
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["kube-state-metrics", "kube-prometheus-stack-prometheus-operator", "cloudflared"]
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - { protocol: TCP, port: 8080 }
+        - { protocol: TCP, port: 8081 }
+        - { protocol: TCP, port: 2000 } # cloudflared 지표

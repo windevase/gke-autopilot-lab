@@ -1,0 +1,19 @@
+# 복사해서 terraform.tfvars 로 저장 후 값 입력 (terraform.tfvars 는 Git 제외)
+
+project_id         = "my-gcp-project"
+region             = "us-central1"
+billing_account_id = "000000-000000-000000"
+budget_amount_krw  = 15000
+
+# REGULAR 채널 버전. 확인: gcloud container get-server-config --region us-central1
+cluster_version = "1.37.1-gke.1552000"
+
+# kubectl / 쿠버네티스 API 접근을 허용할 공인 IP
+master_authorized_cidrs = [
+  { cidr = "203.0.113.10/32", name = "my-pc" },
+]
+
+# Atlantis 권한용 — backend.hcl 과 같은 state 버킷
+state_bucket = "my-gcp-project-tfstate"
+
+# Cloudflare·호스트명 값은 platform/terraform.tfvars.example 참고

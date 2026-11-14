@@ -1,0 +1,19 @@
+# 평일 10~20시 가동 CronJob (Grafana·cloudflared·Argo CD)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: offhours
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:windevase/gcp.git
+    targetRevision: main
+    path: k8s/monitoring/offhours
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # Git = 원본. 클러스터에서 직접 바꾼 내용은 되돌려짐
+    syncOptions:
+      - RespectIgnoreDifferences=true

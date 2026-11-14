@@ -1,0 +1,434 @@
+# kube-prometheus-stack for GKE Autopilot + Spot Pod
+# 비용 설계: 합계 약 0.6 vCPU / 2.1GiB requests (Spot 기준 월 약 $8)
+# Autopilot은 requests 기준 과금 + requests 없는 컨테이너엔 큰 기본값을 넣으므로
+# 사이드카/리로더까지 모든 컨테이너에 requests를 명시함
+
+cleanPrometheusOperatorObjectNames: true
+
+# --- Autopilot에서 수집 불가/불필요한 대상 비활성화 (관리형 컨트롤 플레인, hostNetwork 금지) ---
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+coreDns:
+  enabled: false
+# ※ 2026-11-08: 기본 대시보드·recording rule 제거 → 수집은 "커스텀 대시보드가 쓰는 지표만 keep" 방식
+#   새 패널에 지표가 필요하면 아래 keep 정규식에 추가해야 함 (안 하면 수집 안 됨)
+#   사용처: dashboards/lab-cost-capacity.json, dashboards/lab-cluster-performance.json
+kubeApiServer:
+  serviceMonitor:
+    metricRelabelings:
+      - action: keep
+        sourceLabels: [__name__]
+        regex: (apiserver_request_total|apiserver_request_sli_duration_seconds_bucket)
+      # sli 버킷은 세분화 le 축소 (지연 패널은 근사값)
+      - action: drop
+        sourceLabels: [__name__, le]
+        regex: (apiserver_request_sli_duration_seconds_bucket);(0\.15|0\.2|0\.3|0\.35|0\.4|0\.45|0\.6|0\.7|0\.8|0\.9|1\.25|1\.5|1\.75|2|3|3\.5|4|4\.5|6|7|8|9|15|20|30|40|45|50)(\.0)?
+kubeDns:
+  enabled: false # 수집용 Service를 kube-system에 만들어야 함 → Autopilot 관리형 네임스페이스라 불가
+# kubelet/cAdvisor: 차트 ServiceMonitor 대신 Prometheus 자체 노드 탐색(kubernetes_sd role: node)으로 수집 (아래 additionalScrapeConfigs)
+# - 이유: ServiceMonitor 방식은 Operator가 노드 목록(Endpoints)을 갱신하는데, Operator를 평소 0으로 두므로
+#   Spot 회수/노드 교체 시 새 노드가 수집되지 않음 → Prometheus가 API watch로 노드를 직접 찾게 변경 (2026-11-08)
+# - 레이블(job=kubelet, instance=<IP>:10250, node, metrics_path)은 기존과 동일하게 맞춤 → 대시보드 쿼리 변경 없음
+kubelet:
+  enabled: false
+  namespace: monitoring
+nodeExporter:
+  enabled: false # hostNetwork/hostPID 필요 → Autopilot 불가. 노드 지표는 kubelet/cAdvisor로 대체
+
+# 기본 규칙 전부 미사용: 알림은 Alertmanager 없음, recording rule은 기본 대시보드 전용이었음 (커스텀 대시보드는 원본 지표만 사용)
+defaultRules:
+  create: false
+
+# --- Prometheus Operator ---
+prometheusOperator:
+  nodeSelector:
+    cloud.google.com/gke-spot: "true"
+  # 실측 최대 메모리 ~36Mi → 64Mi (CPU 50m은 Autopilot 파드 최소값이라 유지)
+  # ephemeral-storage: Autopilot 기본 1Gi/컨테이너 과금(무료 티어 아님) → 로그(10Mi×5 순환)만 쓰므로 100Mi
+  resources:
+    requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 64Mi }
+  prometheusConfigReloader:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 100Mi }
+      limits: { cpu: 10m, memory: 32Mi }
+  kubeletService:
+    namespace: monitoring
+  # 설치/업그레이드마다 뜨는 인증서 패치 Job 제거 (CR 검증 웹훅 미사용)
+  admissionWebhooks:
+    enabled: false
+  serviceMonitor:
+    selfMonitor: false # Operator 자체 지표 미사용 (평소 replicas=0)
+  tls:
+    enabled: false # 웹훅 인증서에 의존하므로 같이 끔
+
+# --- Prometheus ---
+prometheus:
+  prometheusSpec:
+    nodeSelector:
+      cloud.google.com/gke-spot: "true"
+    # 2대 운영 (2026-11-09): Spot 회수·노드 교체 시 수집 공백 방지. 레플리카별 PV 5Gi (합 10GB, PD 무료 30GB 내)
+    # 두 대가 같은 대상을 각자 수집 → Grafana는 Service sessionAffinity로 한 대만 조회 (아래 service)
+    replicas: 2
+    # 목적은 Spot VM 1대 회수 시 수집 공백 방지 → 두 레플리카를 다른 노드에 강제 배치 (존 분산은 불필요, 사용자 결정)
+    # 차트 기본 soft anti-affinity로는 같은 노드에 같이 뜸 (11-09 실제 발생). PV 2개 모두 us-central1-c
+    # podAntiAffinity: hard 는 Autopilot이 CPU 500m 이상만 허용 (Warden 거부) → topologySpread(hostname)로 대체
+    # minDomains 2: Spot 노드가 1대뿐이면 배치 거부 → Autopilot이 노드를 하나 더 만듦
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        minDomains: 2
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: prometheus
+            operator.prometheus.io/name: kps-kube-prometheus-stack
+    # 실측 (keep 리스트 적용, head GC 후 11-09 01~21시): 메모리 최대 239Mi(압축 시점), CPU 최대 ~40m / 평균 ~10m
+    # → 384Mi (여유 1.6배). Autopilot 비율 상한 6.5GiB/vCPU: 파드 416Mi → CPU 최소 ~63m → 60m + reloader 10m
+    # (11-08 이전: 768Mi/115m, 지표 감축 전 실측 ~506Mi)
+    # 파드 합계 384+32+96(thanos)=512Mi → CPU 최소 ~79m = prometheus 60m + reloader 10m + thanos 10m
+    resources:
+      requests: { cpu: 60m, memory: 384Mi, ephemeral-storage: 100Mi } # TSDB는 PV, 임시 디스크는 로그뿐
+      limits: { memory: 384Mi }
+    # Thanos sidecar (2026-11-09): 오브젝트 스토리지 업로드 없이 gRPC StoreAPI만 노출 → Grafana 파드의 Thanos Query가
+    # 두 레플리카를 동시에 조회하고 prometheus_replica 레이블로 중복 제거 (한쪽 공백을 다른 쪽 데이터로 메움)
+    # 장기 보관은 하지 않음 (사용자 결정) → objectStorageConfig 없음, 이미지는 Operator 기본(v0.42.5)
+    # 48Mi에서 OOMKilled (11-09: 29시간 범위 대시보드 조회 시 장기 구간 Series 스트리밍) → 96Mi
+    # (평상시 13~22Mi, 7일 범위 부하 테스트 cgroup 최대 48Mi. 여기가 죽으면 과거 데이터 조회가 끊겨서 2배 여유)
+    thanos:
+      resources:
+        requests: { cpu: 10m, memory: 96Mi, ephemeral-storage: 100Mi }
+        limits: { memory: 96Mi }
+    # config-reloader(사이드카/init)는 Operator 실행 옵션으로 CPU·메모리만 설정됨 → ephemeral은 이름으로 병합 덮어쓰기
+    # (Autopilot은 max(컨테이너 합, init) 기준 과금이라 init도 같이 낮춰야 함)
+    containers:
+      - name: config-reloader
+        resources:
+          requests: { ephemeral-storage: 100Mi }
+    initContainers:
+      - name: init-config-reloader
+        resources:
+          requests: { ephemeral-storage: 100Mi }
+    scrapeInterval: 60s
+    evaluationInterval: 60s
+    retention: 7d
+    retentionSize: 4GB # PV 5Gi 기준 (실측 7일 예상 1~2GiB)
+    # kubelet / cAdvisor 직접 수집 (위 kubelet 섹션 설명 참고). 노드 IP:10250, SA 토큰 인증 (RBAC nodes/metrics는 차트 ClusterRole에 포함)
+    additionalScrapeConfigs:
+      - job_name: kubelet-sd-metrics
+        scheme: https
+        scrape_interval: 60s
+        honor_labels: true
+        tls_config: { insecure_skip_verify: true }
+        authorization: { credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token }
+        kubernetes_sd_configs: [{ role: node }]
+        relabel_configs:
+          - { source_labels: [__meta_kubernetes_node_name], target_label: node }
+          - { target_label: job, replacement: kubelet }
+          - { target_label: metrics_path, replacement: /metrics }
+        metric_relabel_configs:
+          # kubelet 자체 지표는 PV 사용량만 keep
+          - { source_labels: [__name__], action: keep, regex: 'kubelet_volume_stats_(used|capacity)_bytes' }
+      - job_name: kubelet-sd-cadvisor
+        scheme: https
+        metrics_path: /metrics/cadvisor
+        scrape_interval: 60s # 차트 기본 10s → 60s (샘플 1/6)
+        honor_labels: true
+        tls_config: { insecure_skip_verify: true }
+        authorization: { credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token }
+        kubernetes_sd_configs: [{ role: node }]
+        relabel_configs:
+          - { source_labels: [__meta_kubernetes_node_name], target_label: node }
+          - { target_label: job, replacement: kubelet }
+          - { target_label: metrics_path, replacement: /metrics/cadvisor }
+        metric_relabel_configs:
+          # 파드 단위만 남김 (시스템 cgroup 등 pod 없는 시리즈 제거), 가상 인터페이스 제거
+          - { source_labels: [id, pod], action: drop, regex: '.+;' }
+          - { source_labels: [__name__, interface], action: drop, regex: 'container_network_.*;(cali|cilium|cni|lxc|nodelocaldns|tunl).*' }
+          # 커스텀 대시보드가 쓰는 cAdvisor 지표만 keep
+          # (oom_events_total은 Autopilot에서 항상 0이라 제외 → OOM은 KSM last_terminated_reason으로 집계. 11-09)
+          - { source_labels: [__name__], action: keep, regex: 'container_(cpu_usage_seconds_total|cpu_cfs_periods_total|cpu_cfs_throttled_periods_total|memory_working_set_bytes|network_receive_bytes_total|network_transmit_bytes_total|fs_reads_bytes_total|fs_writes_bytes_total)' }
+    # 이후 추가하는 ServiceMonitor/PodMonitor/Rule도 라벨 없이 수집
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: pd-standard-wffc
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi # 10Gi → 5Gi (PVC는 축소 불가 → 기존 PVC 삭제 후 재생성)
+
+  # 2대 운영: 같은 클라이언트(Grafana 파드)는 한 레플리카로 고정 → 데이터 공백이 섞여 보이지 않음.
+  # 그 레플리카가 죽으면 엔드포인트에서 빠져 다른 레플리카로 자동 전환 (비용 0)
+  # (Thanos 도입 후에는 비상용 직접 데이터소스 "Prometheus (direct)"만 이 Service를 씀)
+  service:
+    sessionAffinity: ClientIP
+
+  # Thanos Query가 sidecar를 찾는 headless Service (gRPC 10901, DNS SRV 조회)
+  thanosService:
+    enabled: true
+
+  # Prometheus 자체 지표는 대시보드가 쓰는 것만 keep
+  # (scrape_duration_seconds, up 등 합성 지표는 relabel 대상이 아니라 항상 남음)
+  serviceMonitor:
+    metricRelabelings:
+      - action: keep
+        sourceLabels: [__name__]
+        regex: (prometheus_tsdb_head_series|prometheus_tsdb_head_samples_appended_total)
+
+# --- Recording rule (2026-11-09) ---
+# Thanos Query는 쿼리 대상 시계열의 원본 샘플을 레플리카 2대분 모두 메모리에 올림 →
+# 시계열이 많은 apiserver 지표(히스토그램 1,260개, 요청 431개)를 7일 범위로 조회하면 OOMKilled (실측)
+# → 각 Prometheus가 1분마다 미리 집계 (~10개 / ~30개 시계열). 대시보드는 집계 결과만 조회
+# (defaultRules는 전부 꺼져 있고, 이 2개만 사용. 규칙 추가 후부터 데이터가 쌓임)
+additionalPrometheusRulesMap:
+  lab-recording:
+    groups:
+      - name: lab.apiserver
+        interval: 60s
+        rules:
+          - record: lab:apiserver_request_sli_duration_seconds_bucket:rate5m
+            expr: sum by (le) (rate(apiserver_request_sli_duration_seconds_bucket{verb!~"WATCH|CONNECT"}[5m]))
+          - record: lab:apiserver_request:rate5m
+            expr: sum by (verb, code) (rate(apiserver_request_total[5m]))
+      # cloudflared 카운터는 이름이 _total로 안 끝나서, 대시보드에서 rate()를 직접 걸면 Prometheus 3가
+      # "PromQL info: metric might not be a counter" 경고를 패널마다 띄움 → 규칙에서 미리 계산 (규칙 평가는 경고 없음)
+      # 지표 이름은 그대로 둠. cloudflared가 꺼진 오프아워에는 결과 시계열 없음
+      - name: lab.cloudflared
+        interval: 60s
+        rules:
+          - record: lab:cloudflared_tunnel_requests:rate5m
+            expr: sum(rate(cloudflared_tunnel_total_requests[5m]))
+          - record: lab:cloudflared_tunnel_response_by_code:rate5m
+            expr: sum by (status_code) (rate(cloudflared_tunnel_response_by_code[5m]))
+          - record: lab:quic_client_sent_bytes:rate5m
+            expr: sum(rate(quic_client_sent_bytes[5m]))
+          - record: lab:quic_client_receive_bytes:rate5m
+            expr: sum(rate(quic_client_receive_bytes[5m]))
+
+# --- Alertmanager: 미사용 (알림은 Grafana Alerting으로) ---
+alertmanager:
+  enabled: false
+
+# --- Grafana ---
+grafana:
+  nodeSelector:
+    cloud.google.com/gke-spot: "true"
+  # 기본 대시보드(Kubernetes / ..., Grafana/Prometheus Overview) 미사용 → 커스텀 대시보드만 ConfigMap으로 관리
+  defaultDashboardsEnabled: false
+  # Grafana 자체 지표는 어느 대시보드에서도 안 씀 → 수집 안 함
+  serviceMonitor:
+    enabled: false
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # 사용자/권한/서비스계정 토큰을 재시작(Spot 회수) 후에도 유지 → 1Gi PV (월 ~$0.04)
+  # 대시보드 자체는 계속 ConfigMap으로 코드 관리
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: pd-standard-wffc
+    accessModes: ["ReadWriteOnce"]
+    size: 1Gi
+  # RWO 디스크라 롤링 업데이트 시 새/구 파드 동시 마운트 불가 → Recreate
+  deploymentStrategy:
+    type: Recreate
+
+  # --- Google OAuth 로그인 (admin_email 계정 = Admin, 그 외 최초 로그인 = Viewer) ---
+  # 클라이언트 ID/시크릿은 Secret(grafana-google-oauth)에서 환경변수로 주입 → values에 비밀값 없음
+  envFromSecret: grafana-google-oauth
+  # GitHub 데이터소스 토큰 — Secret grafana-github(GITHUB_TOKEN) = 감시용 읽기 전용 PAT(infra-terraform·gcp: Actions·Contents·Issues·PR read)
+  # 수동 생성(커밋 금지): kubectl create secret generic grafana-github -n monitoring --from-literal=GITHUB_TOKEN=... (값은 C:\gcp\secret\atlantis_guard_pat)
+  envFromSecrets:
+    - name: grafana-github
+      optional: true # 없으면 GitHub 패널만 오류, Grafana 기동은 유지
+  grafana.ini:
+    server:
+      # Cloudflare Tunnel 도메인 (OAuth 리디렉션 주소의 기준). Google OAuth 클라이언트에 /login/google 등록 필요
+      root_url: https://grafana.example.com
+    security:
+      admin_email: admin@example.com # Google 로그인 이메일 → admin 계정에 연결
+    auth:
+      oauth_allow_insecure_email_lookup: true # 이메일로 기존 admin 매칭 (단일 사용자 랩 용도)
+      # 인터넷 공개 → ID/비밀번호 폼 숨김, Google 로그인만 노출 (2026-11-08)
+      # 비상시 admin: port-forward 후 기본인증 API 사용 (Secret grafana-admin)
+      disable_login_form: true
+    users:
+      allow_sign_up: false # 로그인 폼 회원가입은 차단 (Google 로그인으로만 신규 사용자 생성)
+      auto_assign_org: true
+      auto_assign_org_role: Viewer # 최초 로그인 사용자는 무조건 읽기 전용
+    auth.google:
+      enabled: true
+      # 관리자 승인제 (2026-11-08~): 자동 가입 차단 → Grafana에 미리 등록된 이메일만 Google 로그인 가능
+      # 승인 = 관리자가 Administration > Users and access > Users > New user 로 해당 Gmail 주소를 등록
+      #        (oauth_allow_insecure_email_lookup=true 라 같은 이메일의 Google 로그인이 그 계정에 연결됨, 역할 기본 Viewer)
+      allow_sign_up: false
+      # Google은 역할 정보를 주지 않음 → 로그인마다 역할 동기화하면 Admin도 Viewer로 강등됨
+      # 동기화를 끄고 역할은 Grafana(UI/API)에서 관리
+      skip_org_role_sync: true
+      scopes: openid email profile
+      use_pkce: true
+  initChownData:
+    enabled: false
+  testFramework:
+    enabled: false
+  # 256Mi에서 사용량이 한도에 붙어 기동 실패 확인 → 448Mi
+  # (Autopilot 메모리:CPU 비율 상한 6.5GiB/vCPU 때문에 CPU도 100m로 함께 조정)
+  # 448Mi에서도 사용량 96% → 512Mi → BigQuery 플러그인 백엔드 프로세스 추가로 576Mi
+  resources:
+    # GitHub 플러그인 백엔드 추가(2026-11-14) → 640Mi, Infinity 플러그인 추가 → 768Mi
+    # (Autopilot 비율 상한 6.5GiB/vCPU — 768Mi 는 CPU 125m 필요)
+    requests: { cpu: 125m, memory: 768Mi, ephemeral-storage: 100Mi } # DB·플러그인은 PV
+    limits: { memory: 768Mi }
+  # 실제 청구액 대시보드용 (결제 데이터 BigQuery 내보내기)
+  plugins:
+    - grafana-bigquery-datasource
+    - grafana-github-datasource # terraform CI/CD 이력(PR·Actions·이슈) — lab-github 대시보드
+    - yesoreyeram-infinity-datasource # REST(JSON) 조회 — GitHub 결제 사용량·캐시·API 한도 (lab-github-usage)
+  # 첫 기동이 느림 → liveness 대기 시간을 넉넉히 (비용 0)
+  livenessProbe:
+    initialDelaySeconds: 300
+  sidecar:
+    resources:
+      # 64Mi에서 OOMKilled 확인 → 128Mi
+      requests: { cpu: 25m, memory: 128Mi, ephemeral-storage: 100Mi } # 대시보드 JSON(emptyDir, 수백KB) + 로그
+      limits: { memory: 128Mi }
+    datasources:
+      enabled: false # 데이터소스는 아래에 직접 정의 → 사이드카 1개 절감
+    dashboards:
+      # 리로드 API는 admin 기본인증을 쓰는데, Google 로그인이 admin 로그인명을 바꿔 401 발생
+      # → API 리로드 대신 Grafana의 주기적 파일 스캔(30초)으로 반영
+      skipReload: true
+  # Thanos Query를 Grafana 파드 사이드카로 실행 (2026-11-09)
+  # 조회 주체가 Grafana뿐이라 Grafana와 같이 오프아워에 꺼짐 → 별도 Deployment(24h) 대비 과금 ~30% 시간만
+  # budget-guard·오프아워 스케일러도 Grafana Deployment만 내리면 같이 내려감
+  extraContainers: |
+    - name: thanos-query
+      image: quay.io/thanos/thanos:v0.42.5
+      args:
+        - query
+        - --http-address=0.0.0.0:10902   # NetworkPolicy로 외부 차단 (Grafana 파드 인바운드는 3000만 허용)
+        - --grpc-address=127.0.0.1:10901
+        - --endpoint=dnssrv+_grpc._tcp.kps-kube-prometheus-stack-thanos-discovery.monitoring.svc.cluster.local
+        - --query.replica-label=prometheus_replica
+        - --query.max-concurrent=4       # 대시보드 패널 동시 조회로 인한 메모리 급증 억제 (기본 20)
+        - --query.promql-engine=thanos   # 스트리밍 처리 엔진 (기본 prometheus 엔진보다 메모리 효율적)
+        - --log.level=warn
+      ports:
+        - { name: thanos-http, containerPort: 10902 }
+      readinessProbe:
+        httpGet: { path: /-/ready, port: 10902 }
+        periodSeconds: 10
+      # 64Mi에서 OOMKilled (11-09: 29시간 범위, prometheus 엔진 + apiserver 원본 히스토그램)
+      # → recording rule + thanos 엔진 적용 후 7일 범위 95쿼리 40개 동시 x6회 cgroup 최대 42.7Mi → 128Mi (3배)
+      resources:
+        requests: { cpu: 10m, memory: 128Mi, ephemeral-storage: 100Mi }
+        limits: { memory: 128Mi }
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: { drop: ["ALL"] }
+        seccompProfile: { type: RuntimeDefault }
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        # 기본: Thanos Query (두 Prometheus 레플리카 병합·중복 제거). uid는 그대로 → 대시보드 수정 불필요
+        - name: Prometheus
+          type: prometheus
+          uid: prometheus
+          url: http://localhost:10902/
+          access: proxy
+          isDefault: true
+          jsonData:
+            timeInterval: 60s
+            prometheusType: Thanos
+            httpMethod: POST
+            # 새로고침마다 전체 범위(최대 7일)를 다시 가져오지 않고 새 구간 + 겹침 10분만 조회 (Grafana가 결과 캐시)
+            incrementalQuerying: true
+            incrementalQueryOverlapWindow: 10m
+        # 비상용: Thanos 사이드카 장애 시 Prometheus Service 직접 조회 (sessionAffinity로 한 대 고정)
+        - name: Prometheus (direct)
+          type: prometheus
+          uid: prometheus-direct
+          url: http://kps-kube-prometheus-stack-prometheus.monitoring:9090/
+          access: proxy
+          jsonData:
+            timeInterval: 60s
+        # Workload Identity(KSA monitoring/kps-grafana) → 키 파일 없이 GCE 메타데이터 인증
+        # 권한은 Terraform modules/billing-export 에서 데이터셋 읽기 + jobUser만 부여
+        - name: BigQuery Billing
+          type: grafana-bigquery-datasource
+          uid: bigquery-billing
+          editable: false
+          jsonData:
+            authenticationType: gce
+            defaultProject: my-gcp-project
+            processingLocation: US
+        # GitHub (infra-terraform·gcp) — 읽기 전용 PAT, 토큰은 환경 변수(Secret grafana-github)에서만
+        - name: GitHub
+          type: grafana-github-datasource
+          uid: github
+          editable: false
+          jsonData:
+            selectedAuthType: personal-access-token
+          secureJsonData:
+            accessToken: $GITHUB_TOKEN
+        # GitHub REST (Infinity) — 결제 사용량(Plan 읽기)·Actions 캐시·API 한도. 같은 감시용 PAT, api.github.com 만 허용
+        - name: GitHub REST
+          type: yesoreyeram-infinity-datasource
+          uid: github-rest
+          editable: false
+          jsonData:
+            auth_method: bearerToken
+            allowedHosts: ["https://api.github.com"]
+            httpHeaderName1: X-GitHub-Api-Version
+          secureJsonData:
+            bearerToken: $GITHUB_TOKEN
+            httpHeaderValue1: "2022-11-28"
+
+# --- kube-state-metrics ---
+kube-state-metrics:
+  nodeSelector:
+    cloud.google.com/gke-spot: "true"
+  # 실측 최대 메모리 ~28Mi → 64Mi (CPU 50m은 Autopilot 파드 최소값이라 유지)
+  resources:
+    requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 64Mi }
+  # 커스텀 대시보드가 쓰는 지표만 생성 (KSM 자체 CPU/메모리도 절감)
+  metricAllowlist:
+    - kube_node_created
+    - kube_node_info
+    - kube_node_status_allocatable
+    - kube_persistentvolumeclaim_resource_requests_storage_bytes
+    - kube_pod_container_resource_limits
+    - kube_pod_container_resource_requests
+    - kube_pod_container_status_last_terminated_reason
+    - kube_pod_container_status_restarts_total
+    - kube_pod_info
+    - kube_pod_start_time
+    - kube_pod_status_phase
+    # 운영 대시보드: CronJob(오프아워·budget-guard) 상태, 워크로드 가동 상태(오프아워·kill switch 효과)
+    - kube_cronjob_spec_suspend
+    - kube_cronjob_status_last_schedule_time
+    - kube_cronjob_status_last_successful_time
+    - kube_cronjob_next_schedule_time
+    - kube_job_owner
+    - kube_job_status_failed
+    - kube_job_status_succeeded
+    - kube_deployment_spec_replicas
+    - kube_deployment_status_replicas_available
+    - kube_statefulset_replicas
+    - kube_statefulset_status_replicas_ready

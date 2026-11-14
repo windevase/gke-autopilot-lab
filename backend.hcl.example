@@ -1,0 +1,5 @@
+# 복사해서 backend.hcl 로 저장 (Git 제외). tf.ps1 init 이 자동으로 사용
+# 버킷은 부트스트랩 리소스라 Terraform 밖에서 생성:
+#   gcloud storage buckets create gs://<bucket> --location=us-central1 --uniform-bucket-level-access
+#   gcloud storage buckets update gs://<bucket> --versioning
+bucket = "my-gcp-project-tfstate"

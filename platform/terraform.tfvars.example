@@ -1,0 +1,11 @@
+# 복사해서 terraform.tfvars 로 저장 후 값 입력 (terraform.tfvars 는 Git 제외)
+# Atlantis 용으로는 같은 내용을 Secret atlantis-gcp-platform 의 terraform.tfvars 키로 넣는다
+
+project_id = "my-gcp-project"
+region     = "us-central1"
+
+cloudflare_account_id = "00000000000000000000000000000000"
+cloudflare_zone_id    = "00000000000000000000000000000000"
+grafana_hostname      = "grafana.example.com"
+argocd_hostname       = "argocd.example.com"
+atlantis_hostname     = "atlantis.example.com"

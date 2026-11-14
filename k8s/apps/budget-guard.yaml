@@ -1,0 +1,19 @@
+# 예산 초과 자동 차단 CronJob (Pub/Sub pull, WIF)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: budget-guard
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:windevase/gcp.git
+    targetRevision: main
+    path: k8s/monitoring/budget-guard
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # Git = 원본. 클러스터에서 직접 바꾼 내용은 되돌려짐
+    syncOptions:
+      - RespectIgnoreDifferences=true

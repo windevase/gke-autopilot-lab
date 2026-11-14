@@ -1,0 +1,161 @@
+# CI: 클라우드 자격증명 없이 할 수 있는 정적 검증만 수행 (plan/apply는 로컬에서 tf.ps1로)
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terraform:
+    name: Terraform fmt / validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.17.1
+      # Atlantis plan 첫 단계와 같은 사전 검사(서버 측 사본) — PR 화면에 미리 표시
+      # base(main) 버전으로 실행 — PR 이 사전 검사 스크립트를 고쳐 자신을 통과시키지 못하게
+      - name: terraform 사전 검사 (base 버전 tf-precheck)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          s="$RUNNER_TEMP/tf-precheck.sh"
+          git fetch -q --depth=1 origin "$BASE" 2>/dev/null || true
+          git show "$BASE:k8s/atlantis/manifests/guard/tf-precheck.sh" >"$s" 2>/dev/null || cp k8s/atlantis/manifests/guard/tf-precheck.sh "$s"
+          bash "$s" "$PWD"
+      - name: fmt
+        run: terraform fmt -check -recursive -diff
+      - name: init (backend 없이)
+        run: terraform init -backend=false -input=false
+      - name: validate (bootstrap = 루트)
+        run: terraform validate
+      - name: validate (platform — Atlantis 대상)
+        run: |
+          terraform -chdir=platform init -backend=false -input=false
+          terraform -chdir=platform validate
+
+  kubernetes:
+    name: Kubernetes 매니페스트 검증
+    runs-on: ubuntu-latest
+    env:
+      KUBECONFORM_VERSION: v0.6.7
+      CHART_VERSION: 93.3.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: kubeconform 설치
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz
+          sudo mv kubeconform /usr/local/bin/
+      - name: 매니페스트 검증 (values.yaml 제외)
+        run: |
+          find k8s -name '*.yaml' ! -name 'values.yaml' -print0 \
+            | xargs -0 kubeconform -strict -summary -ignore-missing-schemas
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5
+        with:
+          version: v4.1.4
+      - name: Helm 렌더링 + 검증 (kube-prometheus-stack + values.yaml)
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm template kps prometheus-community/kube-prometheus-stack \
+            --version "${CHART_VERSION}" -n monitoring -f k8s/monitoring/kps/values.yaml > rendered.yaml
+          # CRD(Prometheus, ServiceMonitor 등)는 스키마가 없어 건너뜀
+          kubeconform -strict -summary -ignore-missing-schemas rendered.yaml
+      - name: Helm 렌더링 + 검증 (Argo CD + k8s/argocd/values.yaml)
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm template argocd argo/argo-cd --version 10.18.0 -n argocd \
+            -f k8s/argocd/values.yaml > rendered-argocd.yaml
+          kubeconform -strict -summary -ignore-missing-schemas rendered-argocd.yaml
+      - name: Helm·kustomize 렌더링 + 검증 (Atlantis)
+        run: |
+          helm repo add runatlantis https://runatlantis.github.io/helm-charts
+          # 차트 버전은 Argo 앱 파일에서 읽는다 — Renovate 가 앱 파일만 올려도 CI 가 새 버전을 검증 (고정값이면 검증이 빠짐)
+          ver=$(sed -nE 's/^ *targetRevision: *([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' k8s/apps/atlantis.yaml | head -1)
+          [ -n "$ver" ] || { echo "::error::k8s/apps/atlantis.yaml 에서 차트 버전을 못 읽음"; exit 1; }
+          echo "Atlantis 차트 $ver"
+          helm template atlantis runatlantis/atlantis --version "$ver" -n atlantis \
+            -f k8s/atlantis/values.yaml > rendered-atlantis.yaml
+          echo '---' >> rendered-atlantis.yaml
+          kubectl kustomize k8s/atlantis/manifests >> rendered-atlantis.yaml
+          kubeconform -strict -summary -ignore-missing-schemas rendered-atlantis.yaml
+          bash -n k8s/atlantis/manifests/guard/*.sh
+
+  # infra-terraform 원본과 사본이 같은지 (다르면 실패 — 원본을 먼저 고치고 merge 한 뒤 사본을 갱신)
+
+  secrets:
+    name: 비밀값 스캔 (gitleaks)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.18.4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # 전체 커밋 기록 스캔
+      - name: gitleaks 설치
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+      - name: 스캔
+        run: gitleaks detect --source . --redact --verbose
+
+  lint:
+    name: 대시보드 JSON / Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.13"
+      - name: 대시보드 JSON 유효성
+        run: |
+          for f in k8s/monitoring/dashboards/*.json; do
+            python -m json.tool "$f" > /dev/null && echo "ok: $f"
+          done
+      - name: 대시보드 생성기 결과 = 커밋된 JSON
+        run: |
+          cd k8s/monitoring/dashboards
+          # 생성기:결과 JSON (lab-cost-capacity.json은 수작업 관리라 제외)
+          for pair in gen_cluster_dashboard.py:lab-cluster-performance.json \
+                      gen_ops_dashboard.py:lab-ops.json \
+                      gen_billing_dashboard.py:lab-billing.json \
+                      gen_home_dashboard.py:lab-home.json \
+                      gen_argocd_dashboard.py:lab-argocd.json \
+                      gen_github_dashboard.py:lab-github.json \
+                      gen_github_usage_dashboard.py:lab-github-usage.json; do
+            gen="${pair%%:*}"; json="${pair##*:}"
+            python "$gen" "/tmp/$json"
+            diff <(python -m json.tool --sort-keys "/tmp/$json") <(python -m json.tool --sort-keys "$json")
+            echo "ok: $gen = $json"
+          done
+      - name: 대시보드 ConfigMap = JSON
+        run: |
+          pip install --quiet pyyaml
+          cd k8s/monitoring/dashboards
+          python - <<'EOF'
+          import glob, json, yaml
+          for cm_file in sorted(glob.glob("*.configmap.yaml")):
+              cm = yaml.safe_load(open(cm_file, encoding="utf-8"))
+              for name, body in cm["data"].items():
+                  assert json.loads(body) == json.load(open(name, encoding="utf-8")), f"{cm_file}: {name} 불일치 (ConfigMap 재생성 필요)"
+              print("ok:", cm_file)
+          EOF
+      - name: budget-guard 스크립트 문법
+        run: |
+          pip install --quiet pyyaml
+          python - <<'EOF'
+          import yaml
+          docs = list(yaml.safe_load_all(open("k8s/monitoring/budget-guard/budget-guard.yaml", encoding="utf-8")))
+          src = next(d for d in docs if d and d.get("kind") == "ConfigMap")["data"]["guard.py"]
+          compile(src, "guard.py", "exec")
+          print("ok: budget-guard guard.py")
+          EOF

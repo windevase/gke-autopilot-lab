@@ -1,0 +1,163 @@
+# Argo CD (차트 argo/argo-cd 10.17.1 = Argo CD v3.6.1) — GKE Autopilot Spot, 평일 10~20시만 가동
+# 설치(최초 1회·업그레이드): k8s/argocd/install.ps1  (Argo CD 자신은 Argo CD로 관리하지 않음 — 부트스트랩 순환 방지)
+#
+# 로그인 (Grafana와 같은 정책):
+# - Google OAuth만 사용. 로컬 admin 계정 비활성화 → 로그인 화면에 ID/비밀번호 폼 없이 Google 버튼만
+# - 관리자 승인제: 기본 권한 없음(policy.default ""). 미승인 Google 계정은 로그인돼도 아무것도 안 보임
+#   승인 = 아래 policy.csv에 이메일 추가 후 커밋 → 이력이 Git에 남음
+# - OAuth 클라이언트는 Grafana와 공유 (redirect URI https://argocd.<도메인>/auth/callback 추가 등록)
+#   ID/시크릿은 Secret argocd-google-oauth (Git 제외, install.ps1이 Grafana Secret에서 복사)
+#
+# 비용: 파드 4개 × 50m (Autopilot 파드 최소), 메모리 합 ~770Mi, 평일 50시간만 → 월 ~$0.8
+
+global:
+  domain: argocd.example.com
+  nodeSelector:
+    cloud.google.com/gke-spot: "true"
+  # Autopilot은 hard anti-affinity에 CPU 500m 이상을 요구 → 단일 레플리카라 불필요
+  affinity:
+    podAntiAffinity: none
+  # 차트의 server NetworkPolicy는 인바운드 전체 허용(`- {}`)이고 global이 켜지면 끌 수 없음
+  # → global은 끄고 controller/repo-server/redis 정책만 컴포넌트별로 생성,
+  #   기본 차단 + server(cloudflared에서만)는 아래 extraObjects로 직접 정의
+  networkPolicy:
+    create: false
+
+configs:
+  cm:
+    # TLS는 Cloudflare 엣지에서 종료 → 외부 URL은 https
+    url: https://argocd.example.com
+    admin.enabled: false # 로컬 admin 비활성화 → 로그인 폼 숨김 (Google 로그인만)
+    exec.enabled: false
+    statusbadge.enabled: false
+    # CRD 객체(GKE·Prometheus Operator, 개당 수 MB)를 캐시하지 않음 → 컨트롤러 OOM 방지 (관리하는 CRD 없음, kps는 skipCrds)
+    resourceExclusionsAdditional:
+      - apiGroups: [apiextensions.k8s.io]
+        kinds: [CustomResourceDefinition]
+        clusters: ["*"]
+    oidc.config: |
+      name: Google
+      issuer: https://accounts.google.com
+      clientID: $argocd-google-oauth:clientID
+      clientSecret: $argocd-google-oauth:clientSecret
+      requestedScopes: ["openid", "profile", "email"]
+  params:
+    server.insecure: true # cloudflared → argocd-server는 클러스터 내부 HTTP (외부는 Cloudflare TLS)
+    # 앱 7개 규모 → 동시 처리 수 축소 (기본 20/10/20은 메모리 급증 원인)
+    controller.status.processors: "5"
+    controller.operation.processors: "2"
+    controller.kubectl.parallelism.limit: "5"
+  rbac:
+    # 미승인 사용자 = 권한 없음 (로그인은 되지만 앱·프로젝트·클러스터 모두 안 보임)
+    policy.default: ""
+    scopes: "[email]" # Google에는 groups가 없음 → 이메일로 매칭
+    policy.csv: |
+      # 관리자 (본인만)
+      g, admin@example.com, role:admin
+      # 승인한 사용자 (읽기 전용) — 예: g, someone@example.com, role:readonly
+
+# 미사용 컴포넌트 끄기 (비용)
+dex:
+  enabled: false # Argo CD가 Google OIDC를 직접 사용 → Dex 불필요
+notifications:
+  enabled: false
+applicationSet:
+  replicas: 0 # 차트에 enabled 플래그가 없어 0으로
+
+# 리소스: requests = limits(메모리). 임시 스토리지는 Autopilot 기본 1Gi 과금 방지로 100Mi 명시
+controller:
+  networkPolicy: { create: true } # 차트 정책이 metrics 포트(8082)는 모든 네임스페이스에서 허용 → Prometheus 수집 가능
+  # → lab-argocd 대시보드 (+ lab-home GitOps 칸). keep 리스트 방식: 대시보드가 쓰는 지표만 (~70 시계열)
+  # Argo CD가 꺼진 오프아워에는 엔드포인트가 비어 수집 대상 자체가 없음 (down으로 안 잡힘)
+  # ※ ServiceMonitor 추가·변경은 Prometheus Operator를 켜야 반영
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 60s
+      metricRelabelings:
+        - action: keep
+          sourceLabels: [__name__]
+          regex: (argocd_app_info|argocd_app_sync_total|argocd_app_sync_duration_seconds_total|argocd_app_reconcile_(bucket|count|sum)|argocd_app_k8s_request_total|argocd_cluster_api_resource_objects|argocd_cluster_api_resources|argocd_cluster_cache_age_seconds|argocd_cluster_events_total|argocd_cluster_connection_status)
+  # 320Mi에서 OOMKilled 4회 (kps 차트 매니페스트 + 클러스터 리소스 캐시) → 512Mi
+  # Autopilot 메모리:CPU 상한 6.5GiB/vCPU → 512Mi면 CPU 최소 ~77m → 100m
+  resources:
+    requests: { cpu: 100m, memory: 512Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 512Mi }
+repoServer:
+  networkPolicy: { create: true } # 차트 정책이 metrics 포트(8084)는 모든 네임스페이스에서 허용
+  # Git 요청 수·소요 시간, 대기 요청 → lab-argocd 대시보드 (~25 시계열)
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 60s
+      metricRelabelings:
+        - action: keep
+          sourceLabels: [__name__]
+          regex: (argocd_git_request_total|argocd_git_request_duration_seconds_(bucket|count|sum)|argocd_repo_pending_request_total)
+  # Helm 차트 렌더링(kube-prometheus-stack)에 메모리 사용
+  # 임시 스토리지: copyutil이 argocd 바이너리를 emptyDir에 복사 + Git 클론·Helm 차트 캐시
+  #   → 100Mi에서 Evicted(ephemeral local storage exceeds) 3회 실측 → 512Mi
+  resources:
+    requests: { cpu: 50m, memory: 256Mi, ephemeral-storage: 512Mi }
+    limits: { memory: 256Mi }
+server:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 128Mi }
+redis:
+  networkPolicy: { create: true }
+  resources:
+    requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 64Mi }
+redisSecretInit:
+  resources:
+    requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 64Mi }
+
+extraObjects:
+  # in-cluster 감시 범위를 앱이 쓰는 네임스페이스로 제한 (+ StorageClass·CRD 같은 클러스터 범위 리소스)
+  # 기본은 클러스터 전체(kube-system·GKE 관리 네임스페이스 포함)를 캐시 → 컨트롤러 512Mi에서도 OOMKilled
+  # 새 네임스페이스에 앱을 배포하려면 여기에 추가
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: cluster-in-cluster
+      labels:
+        argocd.argoproj.io/secret-type: cluster
+    type: Opaque
+    stringData:
+      name: in-cluster
+      server: https://kubernetes.default.svc
+      namespaces: argocd,monitoring,atlantis
+      clusterResources: "true"
+  # 기본: argocd 네임스페이스 모든 인바운드 차단
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: argocd-default-deny-ingress
+    spec:
+      podSelector: {}
+      policyTypes: ["Ingress"]
+  # 외부 진입: argocd-server는 cloudflared(monitoring 네임스페이스) 파드에서만
+  # (그 앞단 Cloudflare WAF 규칙이 argocd 호스트를 이 PC 공인 IP로만 제한)
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: argocd-server-from-cloudflared
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: argocd-server
+      policyTypes: ["Ingress"]
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: cloudflared
+          ports:
+            - { protocol: TCP, port: 8080 }

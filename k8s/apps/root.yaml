@@ -1,0 +1,20 @@
+# App of Apps 루트: k8s/apps/ 의 Application 정의들을 관리 (자기 자신 제외)
+# 최초 1회만 수동 적용: kubectl apply -f k8s/apps/root.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:windevase/gcp.git
+    targetRevision: main
+    path: k8s/apps
+    directory:
+      exclude: root.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

@@ -1,0 +1,11 @@
+# Atlantis plan 단계용 AWS 프로필 (AWS_CONFIG_FILE=/etc/aws/config-plan — values.yaml workflow plan 단계 env)
+# 승인 전 autoplan 에서 PR 코드가 실행되므로 plan 은 읽기 전용 역할({역할}-plan: ReadOnlyAccess + 자기 state 읽기·잠금 파일)로
+# apply 단계는 기본 /etc/aws/config(쓰기 역할). 프로필 이름은 같게(프로젝트명) — provider·backend 코드는 그대로
+# 토큰: KSA atlantis projected 토큰(audience sts.amazonaws.com, kubelet 이 자동 갱신)
+# 역할: infra-terraform/_bootstrap 이 만든 프로젝트별 역할 (신뢰 = GKE lab 클러스터 OIDC + sub system:serviceaccount:atlantis:atlantis)
+
+[profile test]
+role_arn = arn:aws:iam::111122223333:role/test-live-atlantis-plan
+web_identity_token_file = /var/run/secrets/aws/token
+role_session_name = atlantis-plan
+region = ap-northeast-2

@@ -1,0 +1,101 @@
+# Cloudflare Tunnel: grafana.example.com -> kps-grafana, argocd.example.com -> argocd-server,
+#                    atlantis.example.com/events -> atlantis (2026-11-13 추가)
+# (공인 IP/LB 없이 아웃바운드 연결만 사용)
+# - 터널: lab-grafana (로컬 관리형: 라우팅 규칙은 아래 ConfigMap으로 코드 관리)
+# - 자격증명: Secret cloudflared-credentials (cloudflared tunnel create 가 만든 <터널ID>.json)
+#     kubectl create secret generic cloudflared-credentials -n monitoring --from-file=credentials.json=$env:USERPROFILE\.cloudflared\<터널ID>.json
+# - 비용: Spot 50m/64Mi, Grafana와 같이 오프아워에 0으로 (offhours-scaler.yaml)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    tunnel: lab-grafana
+    credentials-file: /etc/cloudflared/creds/credentials.json
+    metrics: 0.0.0.0:2000
+    no-autoupdate: true
+    ingress:
+      - hostname: grafana.example.com
+        service: http://kps-grafana.monitoring.svc.cluster.local:80
+      # Argo CD: Cloudflare WAF 규칙으로 관리자 PC 공인 IP만 허용 + Google 로그인 + RBAC 승인제
+      - hostname: argocd.example.com
+        service: http://argocd-server.argocd.svc.cluster.local:80
+      # Atlantis: GitHub 웹훅(/events)만. 나머지 경로(UI·잠금 해제)는 404 → port-forward 로만
+      # WAF 규칙 'Atlantis GitHub webhooks only' 가 GitHub hooks IP·POST /events 만 통과 (tools/waf-atlantis.py)
+      - hostname: atlantis.example.com
+        path: ^/events$
+        service: http://atlantis.atlantis.svc.cluster.local:80
+      - service: http_status:404
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: cloudflared
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudflared
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      terminationGracePeriodSeconds: 25 # Spot 파드 상한
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.11.0
+          args: ["tunnel", "--config", "/etc/cloudflared/config/config.yaml", "run"]
+          ports:
+            - { name: metrics, containerPort: 2000 } # Prometheus 수집 (PodMonitor 아래)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi } # Autopilot 기본 1Gi → 로그만 쓰므로 100Mi
+            limits: { memory: 64Mi }
+          livenessProbe:
+            httpGet: { path: /ready, port: 2000 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - { name: config, mountPath: /etc/cloudflared/config, readOnly: true }
+            - { name: creds, mountPath: /etc/cloudflared/creds, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: cloudflared-config }
+        - name: creds
+          secret: { secretName: cloudflared-credentials }
+---
+# 터널 지표 수집 (운영 & 외부 접속 대시보드). 192개 중 대시보드가 쓰는 ~20개만 keep
+# ※ PodMonitor는 CR → 반영하려면 Operator를 잠깐 켜야 함 (CLAUDE.md Operator 절차)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cloudflared
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 60s
+      metricRelabelings:
+        - action: keep
+          sourceLabels: [__name__]
+          regex: (cloudflared_tunnel_total_requests|cloudflared_tunnel_request_errors|cloudflared_tunnel_response_by_code|cloudflared_tunnel_ha_connections|cloudflared_tunnel_server_locations|cloudflared_tunnel_concurrent_requests_per_tunnel|cloudflared_proxy_connect_latency_sum|cloudflared_proxy_connect_latency_count|quic_client_smoothed_rtt|quic_client_sent_bytes|quic_client_receive_bytes)

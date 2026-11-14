@@ -1,0 +1,1271 @@
+{
+  "uid": "lab-github-usage",
+  "title": "Lab · GitHub 사용량",
+  "description": "GitHub Free 무료 한도 대비 사용량 — Actions 분(Linux 환산)·저장 공간·청구 예정·캐시·API 한도",
+  "tags": [
+    "lab",
+    "github",
+    "cost"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30m",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Actions 무료 한도 — 이번 달 (UTC 기준, GitHub Free 2,000분)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1
+    },
+    {
+      "type": "gauge",
+      "title": "Actions 사용 — 이번 달 / 월 2,000분 (Linux 환산)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "이번 달 Actions 실행 분(private 저장소). Linux 1배·Windows 2배·macOS 10배로 무료 2,000분에서 차감",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: 분",
+          "min": 0,
+          "max": 2000,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1400.0
+              },
+              {
+                "color": "red",
+                "value": 1800.0
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_windows' ? grossQuantity * 2 : (sku == 'actions_macos' ? grossQuantity * 10 : (sku == 'actions_linux' ? grossQuantity : 0))",
+              "text": "lin",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "sum(lin)"
+        }
+      ],
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "남은 분 — 이번 달 (매월 1일 UTC 초기화)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "무료 2,000분 − 이번 달 사용(Linux 환산). 매월 1일(UTC) 초기화",
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 6,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: 분",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 200
+              },
+              {
+                "color": "green",
+                "value": 600
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "B",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_windows' ? grossQuantity * 2 : (sku == 'actions_macos' ? grossQuantity * 10 : (sku == 'actions_linux' ? grossQuantity : 0))",
+              "text": "lin",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "2000 - sum(lin)"
+        }
+      ],
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "월말 예상 — 이번 달 (대략, 한도 월 2,000분)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "지금까지 사용 속도로 한 달(평균 730.5시간)을 채웠을 때. 2,000분 넘으면 빨강",
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 11,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: 분",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1800.0
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "C",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_windows' ? grossQuantity * 2 : (sku == 'actions_macos' ? grossQuantity * 10 : (sku == 'actions_linux' ? grossQuantity : 0))",
+              "text": "lin",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "sum(lin) / ((${__to:date:D} - 1) * 24 + ${__to:date:H} + 1) * 730.5"
+        }
+      ],
+      "id": 4
+    },
+    {
+      "type": "stat",
+      "title": "청구 예정 금액 — 이번 달",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "무료 차감 뒤 실제 청구될 금액(netAmount). 결제 수단·예산이 없으면 한도 초과 시 Actions 가 멈춘다",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "D",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "summarizeExpression": "sum(netAmount)"
+        }
+      ],
+      "id": 5
+    },
+    {
+      "type": "gauge",
+      "title": "저장 공간 — 이번 달 / 월 365 GB-시간",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "Actions·Packages 저장 공간을 시간 단위로 누적한 값. 무료 500MB × 한 달 ≈ 365.2 GB-시간",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: GB-h",
+          "min": 0,
+          "max": 365.2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 255.64
+              },
+              {
+                "color": "red",
+                "value": 328.68
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "E",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_storage' ? grossQuantity : 0",
+              "text": "gbh",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "sum(gbh)"
+        }
+      ],
+      "id": 6
+    },
+    {
+      "type": "stat",
+      "title": "저장 공간 월말 예상 — 이번 달 (대략, 한도 월 365 GB-시간)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "지금 저장량이 월말까지 유지될 때. 365.2 GB-시간 넘으면 빨강 — 오래된 아티팩트 정리",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: GB-h",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 328.68
+              },
+              {
+                "color": "red",
+                "value": 365.2
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "F",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_storage' ? grossQuantity : 0",
+              "text": "gbh",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "sum(gbh) / ((${__to:date:D} - 1) * 24 + ${__to:date:H} + 1) * 730.5"
+        }
+      ],
+      "id": 7
+    },
+    {
+      "type": "stat",
+      "title": "평균 저장량 — 이번 달 (무료 500MB)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "GB-시간 ÷ 이번 달 경과 시간. 순간 저장량이 아니라 평균",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "G",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_storage' ? grossQuantity : 0",
+              "text": "gbh",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "sum(gbh) / ((${__to:date:D} - 1) * 24 + ${__to:date:H} + 1)"
+        }
+      ],
+      "id": 8
+    },
+    {
+      "type": "stat",
+      "title": "Actions 일평균 사용 — 이번 달 (권장 하루 약 66분 이하)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "Linux 환산 분 ÷ 경과 일. 한 달 무료분을 고르게 쓰면 하루 약 66분",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: 분",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "H",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_windows' ? grossQuantity * 2 : (sku == 'actions_macos' ? grossQuantity * 10 : (sku == 'actions_linux' ? grossQuantity : 0))",
+              "text": "lin",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "sum(lin) / ((${__to:date:D} - 1) * 24 + ${__to:date:H} + 1) * 24"
+        }
+      ],
+      "id": 9
+    },
+    {
+      "type": "stat",
+      "title": "남은 비율 — 이번 달 (월 2,000분 기준)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "무료 2,000분 중 아직 쓰지 않은 비율",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "green",
+                "value": 0.3
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "I",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems",
+          "computed_columns": [
+            {
+              "selector": "sku == 'actions_windows' ? grossQuantity * 2 : (sku == 'actions_macos' ? grossQuantity * 10 : (sku == 'actions_linux' ? grossQuantity : 0))",
+              "text": "lin",
+              "type": "number"
+            }
+          ],
+          "summarizeExpression": "1 - sum(lin) / 2000"
+        }
+      ],
+      "id": 10
+    },
+    {
+      "type": "row",
+      "title": "내역 — 이번 달 (UTC)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 11
+    },
+    {
+      "type": "table",
+      "title": "SKU 별 — 이번 달",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "GitHub 결제 요약(이번 달). 사용량 단위: 분 / GB-시간",
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "정가($)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "할인($)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "청구($)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "J",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage/summary",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "product": true,
+              "netQuantity": true,
+              "pricePerUnit": true
+            },
+            "renameByName": {
+              "sku": "SKU",
+              "unitType": "단위",
+              "grossQuantity": "사용량",
+              "discountQuantity": "무료 차감",
+              "grossAmount": "정가($)",
+              "discountAmount": "할인($)",
+              "netAmount": "청구($)"
+            }
+          }
+        }
+      ],
+      "id": 12
+    },
+    {
+      "type": "table",
+      "title": "저장소 별 — 이번 달",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "이번 달 저장소·SKU 별 (계정의 모든 private 저장소 포함)",
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "정가($)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "청구($)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "정가($)",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "K",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/users/windevase/settings/billing/usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "usageItems"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "date": true,
+              "product": true,
+              "pricePerUnit": true,
+              "discountAmount": true
+            },
+            "renameByName": {
+              "repositoryName": "저장소",
+              "sku": "SKU",
+              "quantity": "사용량",
+              "unitType": "단위",
+              "grossAmount": "정가($)",
+              "netAmount": "청구($)"
+            }
+          }
+        }
+      ],
+      "id": 13
+    },
+    {
+      "type": "row",
+      "title": "캐시(현재 보관량) · API 한도(시간당)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 14
+    },
+    {
+      "type": "stat",
+      "title": "Actions 캐시 — infra-terraform (현재 / 저장소당 10GB)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "저장소당 무료 10GB (넘으면 오래된 캐시부터 삭제)",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^active_caches_size_in_bytes$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "L",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/repos/windevase/infra-terraform/actions/cache/usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": ""
+        }
+      ],
+      "id": 15
+    },
+    {
+      "type": "stat",
+      "title": "Actions 캐시 — gcp (현재 / 저장소당 10GB)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "저장소당 무료 10GB (넘으면 오래된 캐시부터 삭제)",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^active_caches_size_in_bytes$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "M",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/repos/windevase/gcp/actions/cache/usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": ""
+        }
+      ],
+      "id": 16
+    },
+    {
+      "type": "gauge",
+      "title": "API 요청 한도 사용 — 시간당 5,000회 (감시용 PAT)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "시간당 5,000회. Grafana GitHub 패널·감시 스크립트·cred-check 가 같은 PAT 를 쓴다",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^summary$/",
+          "values": false
+        },
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "N",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/rate_limit",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "resources.core",
+          "summarizeExpression": "sum(used) / sum(limit)"
+        }
+      ],
+      "id": 17
+    },
+    {
+      "type": "stat",
+      "title": "API 남은 요청 — 이번 시간 (매시 초기화)",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "github-rest"
+      },
+      "description": "이번 시간 창에서 남은 요청 수",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 500
+              },
+              {
+                "color": "green",
+                "value": 1500
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^remaining$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "refId": "O",
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "https://api.github.com/rate_limit",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "resources.core"
+        }
+      ],
+      "id": 18
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+# Atlantis: terraform PR 자동화 (github.com/windevase/infra-terraform — 개인 AWS 테스트 계정, test 프로젝트)
+# 공식 차트 + Git values + 부속 매니페스트(NetworkPolicy·감시 스크립트·AWS 프로필) 멀티 소스
+# 외부 진입: monitoring/cloudflared 공용 터널(lab-grafana)의 atlantis.example.com/events
+# 평소 replicas 0 — 작업할 때만 tools/atlantis.ps1 on/off (replicas는 Argo가 무시)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: atlantis
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://runatlantis.github.io/helm-charts
+      chart: atlantis
+      targetRevision: 7.4.0 # app v0.48.2
+      helm:
+        releaseName: atlantis
+        valueFiles:
+          - $values/k8s/atlantis/values.yaml
+    - repoURL: git@github.com:windevase/gcp.git
+      targetRevision: main
+      ref: values
+    - repoURL: git@github.com:windevase/gcp.git
+      targetRevision: main
+      path: k8s/atlantis/manifests # kustomize (감시 스크립트·AWS 프로필 ConfigMap 생성)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: atlantis
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers: [/spec/replicas]
+    - group: apps
+      kind: Deployment
+      jsonPointers: [/spec/replicas]
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # Git = 원본. 클러스터에서 직접 바꾼 내용은 되돌려짐
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true

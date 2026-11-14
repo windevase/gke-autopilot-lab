@@ -1,0 +1,2960 @@
+apiVersion: v1
+data:
+  lab-github.json: |
+    {
+      "uid": "lab-github",
+      "title": "Lab · Terraform CI/CD",
+      "description": "Atlantis 실시간 지표(켜 둔 동안) + GitHub PR·Actions·정책 위반 이력 — infra-terraform·gcp",
+      "tags": [
+        "lab",
+        "cicd",
+        "atlantis",
+        "github"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "5m",
+      "time": {
+        "from": "now-30d",
+        "to": "now"
+      },
+      "templating": {
+        "list": []
+      },
+      "annotations": {
+        "list": []
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "요약 (선택 기간)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1
+        },
+        {
+          "type": "stat",
+          "title": "merge 된 PR",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "두 저장소(infra-terraform·gcp)에서 선택 기간에 merge 된 PR 수 — 요청 처리량",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "count"
+              ],
+              "fields": "/^number$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "A",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "query": "is:merged",
+                "timeField": 2
+              }
+            },
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "B",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "query": "is:merged",
+                "timeField": 2
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            }
+          ],
+          "id": 2
+        },
+        {
+          "type": "stat",
+          "title": "평균 리드타임",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "PR 생성 → merge 까지 평균(채팅 보고·승인·apply 포함). 1일 넘으면 주황, 3일 넘으면 빨강",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 86400
+                  },
+                  {
+                    "color": "red",
+                    "value": 259200
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "/^open_time$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "C",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "query": "is:merged",
+                "timeField": 2
+              }
+            },
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "D",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "query": "is:merged",
+                "timeField": 2
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            }
+          ],
+          "id": 3
+        },
+        {
+          "type": "stat",
+          "title": "열린 PR",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "지금 열려 있는 PR(기간 무관). 오래 열려 있으면 apply 실패·승인 대기 확인",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 3
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "count"
+              ],
+              "fields": "/^number$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "E",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "query": "is:open",
+                "timeField": 4
+              }
+            },
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "F",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "query": "is:open",
+                "timeField": 4
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            }
+          ],
+          "id": 4
+        },
+        {
+          "type": "stat",
+          "title": "정책 위반 이슈 (열림)",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "policy-audit(사후·교차 감사)가 만든 policy-violation 이슈 중 열린 것. 0 이어야 정상",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "count"
+              ],
+              "fields": "/^number$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "G",
+              "queryType": "Issues",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "query": "label:policy-violation is:open",
+                "timeField": 0
+              }
+            },
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "H",
+              "queryType": "Issues",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "query": "label:policy-violation is:open",
+                "timeField": 0
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            }
+          ],
+          "id": 5
+        },
+        {
+          "type": "stat",
+          "title": "감시 해제 라벨 PR",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "감시 차단을 해제 라벨(allow-*)로 풀고 merge 된 PR 수 — 삭제·공개 인바운드 등 위험 변경",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "count"
+              ],
+              "fields": "/^number$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "I",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "query": "is:merged label:allow-destroy,allow-force-destroy,allow-open-ingress,allow-iam-wildcard,allow-admin-policy,allow-entry-removal",
+                "timeField": 2
+              }
+            },
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "J",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "query": "is:merged label:allow-destroy,allow-force-destroy,allow-open-ingress,allow-iam-wildcard,allow-admin-policy,allow-entry-removal",
+                "timeField": 2
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            }
+          ],
+          "id": 6
+        },
+        {
+          "type": "stat",
+          "title": "Atlantis",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "평소 꺼 둠(replicas 0). 처리할 때만 C:\\gcp\\tools\\atlantis.ps1 on, 매일 20:00 자동 종료",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0,
+              "mappings": [
+                {
+                  "type": "range",
+                  "options": {
+                    "from": 0,
+                    "to": 0,
+                    "result": {
+                      "text": "꺼짐",
+                      "color": "#808080",
+                      "index": 0
+                    }
+                  }
+                },
+                {
+                  "type": "range",
+                  "options": {
+                    "from": 1,
+                    "to": 100,
+                    "result": {
+                      "text": "켜짐",
+                      "color": "green",
+                      "index": 1
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max(kube_statefulset_replicas{namespace=\"atlantis\", statefulset=\"atlantis\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 7
+        },
+        {
+          "type": "row",
+          "title": "사후 감사 · Atlantis 가동",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 5
+          },
+          "id": 8
+        },
+        {
+          "type": "stat",
+          "title": "사후 감사 — infra-terraform",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "description": "main merge 직후 감사(보호 경로 변경의 채팅 승인 기록·force-push). 실패면 policy-violation 이슈 확인",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "success": {
+                      "text": "성공",
+                      "color": "green",
+                      "index": 0
+                    },
+                    "failure": {
+                      "text": "실패",
+                      "color": "red",
+                      "index": 1
+                    },
+                    "cancelled": {
+                      "text": "취소",
+                      "color": "orange",
+                      "index": 2
+                    },
+                    "": {
+                      "text": "진행 중",
+                      "color": "blue",
+                      "index": 3
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "시각"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "firstNotNull"
+              ],
+              "fields": "/^(결과|시각)$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "github-rest"
+              },
+              "refId": "A",
+              "type": "json",
+              "source": "url",
+              "parser": "backend",
+              "format": "table",
+              "url": "https://api.github.com/repos/windevase/infra-terraform/actions/workflows/policy-audit.yml/runs?event=push&per_page=1",
+              "url_options": {
+                "method": "GET",
+                "data": ""
+              },
+              "root_selector": "workflow_runs",
+              "columns": [
+                {
+                  "selector": "conclusion",
+                  "text": "결과",
+                  "type": "string"
+                },
+                {
+                  "selector": "created_at",
+                  "text": "시각",
+                  "type": "timestamp"
+                },
+                {
+                  "selector": "event",
+                  "text": "이벤트",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "id": 9
+        },
+        {
+          "type": "stat",
+          "title": "사후 감사 — gcp",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "description": "main merge 직후 감사",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "success": {
+                      "text": "성공",
+                      "color": "green",
+                      "index": 0
+                    },
+                    "failure": {
+                      "text": "실패",
+                      "color": "red",
+                      "index": 1
+                    },
+                    "cancelled": {
+                      "text": "취소",
+                      "color": "orange",
+                      "index": 2
+                    },
+                    "": {
+                      "text": "진행 중",
+                      "color": "blue",
+                      "index": 3
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "시각"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "firstNotNull"
+              ],
+              "fields": "/^(결과|시각)$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "github-rest"
+              },
+              "refId": "A",
+              "type": "json",
+              "source": "url",
+              "parser": "backend",
+              "format": "table",
+              "url": "https://api.github.com/repos/windevase/gcp/actions/workflows/policy-audit.yml/runs?event=push&per_page=1",
+              "url_options": {
+                "method": "GET",
+                "data": ""
+              },
+              "root_selector": "workflow_runs",
+              "columns": [
+                {
+                  "selector": "conclusion",
+                  "text": "결과",
+                  "type": "string"
+                },
+                {
+                  "selector": "created_at",
+                  "text": "시각",
+                  "type": "timestamp"
+                },
+                {
+                  "selector": "event",
+                  "text": "이벤트",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "id": 10
+        },
+        {
+          "type": "stat",
+          "title": "교차 감사 — infra-terraform",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "description": "매일 09:17 KST 상대 저장소(gcp) 감사 — 감사 파일 동일·승인 기록·직접 push. 하루 넘게 지났으면 실행 누락",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "success": {
+                      "text": "성공",
+                      "color": "green",
+                      "index": 0
+                    },
+                    "failure": {
+                      "text": "실패",
+                      "color": "red",
+                      "index": 1
+                    },
+                    "cancelled": {
+                      "text": "취소",
+                      "color": "orange",
+                      "index": 2
+                    },
+                    "": {
+                      "text": "진행 중",
+                      "color": "blue",
+                      "index": 3
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "시각"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "firstNotNull"
+              ],
+              "fields": "/^(결과|시각)$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "github-rest"
+              },
+              "refId": "A",
+              "type": "json",
+              "source": "url",
+              "parser": "backend",
+              "format": "table",
+              "url": "https://api.github.com/repos/windevase/infra-terraform/actions/workflows/policy-audit.yml/runs?per_page=20",
+              "url_options": {
+                "method": "GET",
+                "data": ""
+              },
+              "root_selector": "workflow_runs",
+              "columns": [
+                {
+                  "selector": "conclusion",
+                  "text": "결과",
+                  "type": "string"
+                },
+                {
+                  "selector": "created_at",
+                  "text": "시각",
+                  "type": "timestamp"
+                },
+                {
+                  "selector": "event",
+                  "text": "이벤트",
+                  "type": "string"
+                }
+              ],
+              "filterExpression": "이벤트 != 'push'"
+            }
+          ],
+          "id": 11
+        },
+        {
+          "type": "stat",
+          "title": "교차 감사 — gcp",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "github-rest"
+          },
+          "description": "매일 09:17 KST 상대 저장소(infra-terraform) 감사",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "success": {
+                      "text": "성공",
+                      "color": "green",
+                      "index": 0
+                    },
+                    "failure": {
+                      "text": "실패",
+                      "color": "red",
+                      "index": 1
+                    },
+                    "cancelled": {
+                      "text": "취소",
+                      "color": "orange",
+                      "index": 2
+                    },
+                    "": {
+                      "text": "진행 중",
+                      "color": "blue",
+                      "index": 3
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "시각"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "firstNotNull"
+              ],
+              "fields": "/^(결과|시각)$/",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "github-rest"
+              },
+              "refId": "A",
+              "type": "json",
+              "source": "url",
+              "parser": "backend",
+              "format": "table",
+              "url": "https://api.github.com/repos/windevase/gcp/actions/workflows/policy-audit.yml/runs?per_page=20",
+              "url_options": {
+                "method": "GET",
+                "data": ""
+              },
+              "root_selector": "workflow_runs",
+              "columns": [
+                {
+                  "selector": "conclusion",
+                  "text": "결과",
+                  "type": "string"
+                },
+                {
+                  "selector": "created_at",
+                  "text": "시각",
+                  "type": "timestamp"
+                },
+                {
+                  "selector": "event",
+                  "text": "이벤트",
+                  "type": "string"
+                }
+              ],
+              "filterExpression": "이벤트 != 'push'"
+            }
+          ],
+          "id": 12
+        },
+        {
+          "type": "stat",
+          "title": "Atlantis 가동 — 최근 7일",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "평소 꺼 둠(필요할 때 켜고 20:00 자동 종료). 40시간 넘으면 주황 — 켜 둔 채 잊었는지 확인",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "h",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 40
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "(sum_over_time((max(kube_statefulset_replicas{namespace=\"atlantis\", statefulset=\"atlantis\"}) > bool 0)[7d:5m]) * 5 / 60) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 13
+        },
+        {
+          "type": "stat",
+          "title": "Atlantis 비용 — 최근 7일(대략)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "가동 시간 × 파드 requests 단가(비 Spot 250m/1Gi ≈ $0.016/h). PVC 2Gi(월 약 $0.08)는 제외",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "((sum_over_time((max(kube_statefulset_replicas{namespace=\"atlantis\", statefulset=\"atlantis\"}) > bool 0)[7d:5m]) * 5 / 60) or vector(0)) * (0.25 * 0.0445 + 1 * 0.0049225)",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 14
+        },
+        {
+          "type": "row",
+          "title": "Atlantis 실시간 (최근 24시간 — 켜 둔 동안만, Prometheus)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 10
+          },
+          "id": 15
+        },
+        {
+          "type": "state-timeline",
+          "title": "가동 구간",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "atlantis.ps1 on/off, 20:00 오프아워 종료",
+          "gridPos": {
+            "h": 4,
+            "w": 24,
+            "x": 0,
+            "y": 11
+          },
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                {
+                  "type": "range",
+                  "options": {
+                    "from": 0,
+                    "to": 0,
+                    "result": {
+                      "text": "꺼짐",
+                      "color": "#808080",
+                      "index": 0
+                    }
+                  }
+                },
+                {
+                  "type": "range",
+                  "options": {
+                    "from": 1,
+                    "to": 100,
+                    "result": {
+                      "text": "켜짐",
+                      "color": "green",
+                      "index": 1
+                    }
+                  }
+                }
+              ],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "custom": {
+                "fillOpacity": 80,
+                "lineWidth": 0
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showValue": "never",
+            "mergeValues": true,
+            "rowHeight": 0.8,
+            "legend": {
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max(kube_statefulset_replicas{namespace=\"atlantis\", statefulset=\"atlantis\"})",
+              "legendFormat": "atlantis",
+              "refId": "A",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "id": 16,
+          "timeFrom": "24h"
+        },
+        {
+          "type": "timeseries",
+          "title": "프로젝트 실행 결과 (5분)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "plan·apply 프로젝트 실행. success / error(실행 오류) / failure(plan·apply 실패·감시 차단)",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 15
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "showPoints": "never",
+                "spanNulls": 900000,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "decimals": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*error.*|.*failure.*"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(atlantis_project_execution_success_total[5m]))",
+              "legendFormat": "success",
+              "refId": "A",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(atlantis_project_execution_error_total[5m]))",
+              "legendFormat": "error",
+              "refId": "B",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(atlantis_project_execution_failure_total[5m]))",
+              "legendFormat": "failure",
+              "refId": "C",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "id": 17,
+          "timeFrom": "24h"
+        },
+        {
+          "type": "timeseries",
+          "title": "명령별 실행 (5분)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "autoplan·comment plan·comment apply 등 명령 단위. 첫 실행 뒤에 지표가 생긴다",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 15
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "showPoints": "never",
+                "spanNulls": 900000,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0,
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (cmd, result) (increase(label_replace(label_replace({__name__=~\"atlantis_cmd_.+_execution_(success|error|failure)_total\"}, \"cmd\", \"$1\", \"__name__\", \"atlantis_cmd_(.+)_execution_.*\"), \"result\", \"$1\", \"__name__\", \".*_execution_(.+)_total\")[5m:1m]))",
+              "legendFormat": "{{cmd}} {{result}}",
+              "refId": "A",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "id": 18,
+          "timeFrom": "24h"
+        },
+        {
+          "type": "stat",
+          "title": "실행 성공 (24시간)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 23
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(atlantis_project_execution_success_total[$__range])) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 19,
+          "timeFrom": "24h"
+        },
+        {
+          "type": "stat",
+          "title": "실행 실패·오류 (24시간)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 23
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "(sum(increase(atlantis_project_execution_error_total[$__range])) or vector(0)) + (sum(increase(atlantis_project_execution_failure_total[$__range])) or vector(0))",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 20,
+          "timeFrom": "24h"
+        },
+        {
+          "type": "timeseries",
+          "title": "Atlantis 런타임",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 23
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": 900000,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "heap"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max(atlantis_scheduled_runtime_memory_heap_alloc)",
+              "legendFormat": "heap",
+              "refId": "A",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max(atlantis_scheduled_runtime_cpu_goroutines)",
+              "legendFormat": "goroutines",
+              "refId": "B",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "id": 21,
+          "timeFrom": "24h"
+        },
+        {
+          "type": "row",
+          "title": "GitHub 이력 (영구 기록 — Atlantis 를 꺼 둬도 남음)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 29
+          },
+          "id": 22
+        },
+        {
+          "type": "table",
+          "title": "merge 된 PR — infra-terraform",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "채팅 승인 후 merge 된 PR(봇 PR = 요청 처리, 본인 PR = 정책 변경). 리드타임 = 생성 → merge",
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 30
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "리드타임"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "merge",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "K",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "query": "is:merged",
+                "timeField": 2
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "url": true,
+                  "additions": true,
+                  "deletions": true,
+                  "state": true,
+                  "author_name": true,
+                  "author_email": true,
+                  "author_company": true,
+                  "closed": true,
+                  "is_draft": true,
+                  "locked": true,
+                  "merged": true,
+                  "mergeable": true,
+                  "closed_at": true,
+                  "merged_by_name": true,
+                  "merged_by_login": true,
+                  "merged_by_email": true,
+                  "merged_by_company": true,
+                  "updated_at": true,
+                  "repository": true,
+                  "labels": true
+                },
+                "renameByName": {
+                  "number": "#",
+                  "title": "제목",
+                  "author_login": "작성자",
+                  "created_at": "생성",
+                  "merged_at": "merge",
+                  "open_time": "리드타임"
+                }
+              }
+            }
+          ],
+          "id": 23
+        },
+        {
+          "type": "table",
+          "title": "merge 된 PR — gcp",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "채팅 승인 후 merge 된 PR(봇 PR = 요청 처리, 본인 PR = 정책 변경). 리드타임 = 생성 → merge",
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 30
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "리드타임"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "merge",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "L",
+              "queryType": "Pull_Requests",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "query": "is:merged",
+                "timeField": 2
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "url": true,
+                  "additions": true,
+                  "deletions": true,
+                  "state": true,
+                  "author_name": true,
+                  "author_email": true,
+                  "author_company": true,
+                  "closed": true,
+                  "is_draft": true,
+                  "locked": true,
+                  "merged": true,
+                  "mergeable": true,
+                  "closed_at": true,
+                  "merged_by_name": true,
+                  "merged_by_login": true,
+                  "merged_by_email": true,
+                  "merged_by_company": true,
+                  "updated_at": true,
+                  "repository": true,
+                  "labels": true
+                },
+                "renameByName": {
+                  "number": "#",
+                  "title": "제목",
+                  "author_login": "작성자",
+                  "created_at": "생성",
+                  "merged_at": "merge",
+                  "open_time": "리드타임"
+                }
+              }
+            }
+          ],
+          "id": 24
+        },
+        {
+          "type": "table",
+          "title": "code-guard — infra-terraform",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "PR 코드 감시(+회귀 테스트·shellcheck) — 최근 실행",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 39
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "결과"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "success": {
+                            "text": "성공",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "failure": {
+                            "text": "실패",
+                            "color": "red",
+                            "index": 1
+                          },
+                          "cancelled": {
+                            "text": "취소",
+                            "color": "#808080",
+                            "index": 2
+                          },
+                          "skipped": {
+                            "text": "건너뜀",
+                            "color": "#808080",
+                            "index": 3
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "시작",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "M",
+              "queryType": "Workflow_Runs",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "workflow": "code-guard.yml"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "id": true,
+                  "name": true,
+                  "head_sha": true,
+                  "updated_at": true,
+                  "run_started_at": true,
+                  "url": true,
+                  "workflow_id": true,
+                  "run_number": true,
+                  "status": true
+                },
+                "renameByName": {
+                  "head_branch": "브랜치",
+                  "conclusion": "결과",
+                  "event": "이벤트",
+                  "created_at": "시작",
+                  "html_url": "링크"
+                }
+              }
+            }
+          ],
+          "id": 25
+        },
+        {
+          "type": "table",
+          "title": "apply-on-approve — infra-terraform",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "채팅 승인(Approve) → atlantis apply 요청 — 최근 실행",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 39
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "결과"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "success": {
+                            "text": "성공",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "failure": {
+                            "text": "실패",
+                            "color": "red",
+                            "index": 1
+                          },
+                          "cancelled": {
+                            "text": "취소",
+                            "color": "#808080",
+                            "index": 2
+                          },
+                          "skipped": {
+                            "text": "건너뜀",
+                            "color": "#808080",
+                            "index": 3
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "시작",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "N",
+              "queryType": "Workflow_Runs",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "workflow": "apply-on-approve.yml"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "id": true,
+                  "name": true,
+                  "head_sha": true,
+                  "updated_at": true,
+                  "run_started_at": true,
+                  "url": true,
+                  "workflow_id": true,
+                  "run_number": true,
+                  "status": true
+                },
+                "renameByName": {
+                  "head_branch": "브랜치",
+                  "conclusion": "결과",
+                  "event": "이벤트",
+                  "created_at": "시작",
+                  "html_url": "링크"
+                }
+              }
+            }
+          ],
+          "id": 26
+        },
+        {
+          "type": "table",
+          "title": "policy-audit — infra-terraform",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "main push 사후 감사 + 매일 교차 감사 — 최근 실행",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 39
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "결과"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "success": {
+                            "text": "성공",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "failure": {
+                            "text": "실패",
+                            "color": "red",
+                            "index": 1
+                          },
+                          "cancelled": {
+                            "text": "취소",
+                            "color": "#808080",
+                            "index": 2
+                          },
+                          "skipped": {
+                            "text": "건너뜀",
+                            "color": "#808080",
+                            "index": 3
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "시작",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "O",
+              "queryType": "Workflow_Runs",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "workflow": "policy-audit.yml"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "id": true,
+                  "name": true,
+                  "head_sha": true,
+                  "updated_at": true,
+                  "run_started_at": true,
+                  "url": true,
+                  "workflow_id": true,
+                  "run_number": true,
+                  "status": true
+                },
+                "renameByName": {
+                  "head_branch": "브랜치",
+                  "conclusion": "결과",
+                  "event": "이벤트",
+                  "created_at": "시작",
+                  "html_url": "링크"
+                }
+              }
+            }
+          ],
+          "id": 27
+        },
+        {
+          "type": "table",
+          "title": "ci — gcp",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "gcp PR 검사(사본 동기화 포함) — 최근 실행",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 46
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "결과"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "success": {
+                            "text": "성공",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "failure": {
+                            "text": "실패",
+                            "color": "red",
+                            "index": 1
+                          },
+                          "cancelled": {
+                            "text": "취소",
+                            "color": "#808080",
+                            "index": 2
+                          },
+                          "skipped": {
+                            "text": "건너뜀",
+                            "color": "#808080",
+                            "index": 3
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "시작",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "P",
+              "queryType": "Workflow_Runs",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "workflow": "ci.yml"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "id": true,
+                  "name": true,
+                  "head_sha": true,
+                  "updated_at": true,
+                  "run_started_at": true,
+                  "url": true,
+                  "workflow_id": true,
+                  "run_number": true,
+                  "status": true
+                },
+                "renameByName": {
+                  "head_branch": "브랜치",
+                  "conclusion": "결과",
+                  "event": "이벤트",
+                  "created_at": "시작",
+                  "html_url": "링크"
+                }
+              }
+            }
+          ],
+          "id": 28
+        },
+        {
+          "type": "table",
+          "title": "apply-on-approve — gcp",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "채팅 승인(Approve) → atlantis apply 요청 — 최근 실행",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 46
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "결과"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "success": {
+                            "text": "성공",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "failure": {
+                            "text": "실패",
+                            "color": "red",
+                            "index": 1
+                          },
+                          "cancelled": {
+                            "text": "취소",
+                            "color": "#808080",
+                            "index": 2
+                          },
+                          "skipped": {
+                            "text": "건너뜀",
+                            "color": "#808080",
+                            "index": 3
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "시작",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "Q",
+              "queryType": "Workflow_Runs",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "workflow": "apply-on-approve.yml"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "id": true,
+                  "name": true,
+                  "head_sha": true,
+                  "updated_at": true,
+                  "run_started_at": true,
+                  "url": true,
+                  "workflow_id": true,
+                  "run_number": true,
+                  "status": true
+                },
+                "renameByName": {
+                  "head_branch": "브랜치",
+                  "conclusion": "결과",
+                  "event": "이벤트",
+                  "created_at": "시작",
+                  "html_url": "링크"
+                }
+              }
+            }
+          ],
+          "id": 29
+        },
+        {
+          "type": "table",
+          "title": "policy-audit — gcp",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "main push 사후 감사 + 매일 교차 감사 — 최근 실행",
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 46
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "결과"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "success": {
+                            "text": "성공",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "failure": {
+                            "text": "실패",
+                            "color": "red",
+                            "index": 1
+                          },
+                          "cancelled": {
+                            "text": "취소",
+                            "color": "#808080",
+                            "index": 2
+                          },
+                          "skipped": {
+                            "text": "건너뜀",
+                            "color": "#808080",
+                            "index": 3
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "시작",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "R",
+              "queryType": "Workflow_Runs",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "workflow": "policy-audit.yml"
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "id": true,
+                  "name": true,
+                  "head_sha": true,
+                  "updated_at": true,
+                  "run_started_at": true,
+                  "url": true,
+                  "workflow_id": true,
+                  "run_number": true,
+                  "status": true
+                },
+                "renameByName": {
+                  "head_branch": "브랜치",
+                  "conclusion": "결과",
+                  "event": "이벤트",
+                  "created_at": "시작",
+                  "html_url": "링크"
+                }
+              }
+            }
+          ],
+          "id": 30
+        },
+        {
+          "type": "table",
+          "title": "정책 위반 이슈 — infra-terraform",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "승인 기록 없는 보호 경로 변경(policy-audit). 비어 있어야 정상",
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "S",
+              "queryType": "Issues",
+              "owner": "windevase",
+              "repository": "infra-terraform",
+              "options": {
+                "query": "label:policy-violation",
+                "timeField": 0
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "author_company": true,
+                  "closed": true,
+                  "updated_at": true,
+                  "labels": true,
+                  "assignees": true,
+                  "milestone": true,
+                  "repo": true
+                },
+                "renameByName": {
+                  "number": "#",
+                  "title": "제목",
+                  "author": "작성",
+                  "state": "상태",
+                  "created_at": "생성",
+                  "closed_at": "닫힘"
+                }
+              }
+            }
+          ],
+          "id": 31
+        },
+        {
+          "type": "table",
+          "title": "정책 위반 이슈 — gcp",
+          "datasource": {
+            "type": "grafana-github-datasource",
+            "uid": "github"
+          },
+          "description": "승인 기록 없는 보호 경로 변경(policy-audit). 비어 있어야 정상",
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 12,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hidden",
+                    "value": false
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-github-datasource",
+                "uid": "github"
+              },
+              "refId": "T",
+              "queryType": "Issues",
+              "owner": "windevase",
+              "repository": "gcp",
+              "options": {
+                "query": "label:policy-violation",
+                "timeField": 0
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "author_company": true,
+                  "closed": true,
+                  "updated_at": true,
+                  "labels": true,
+                  "assignees": true,
+                  "milestone": true,
+                  "repo": true
+                },
+                "renameByName": {
+                  "number": "#",
+                  "title": "제목",
+                  "author": "작성",
+                  "state": "상태",
+                  "created_at": "생성",
+                  "closed_at": "닫힘"
+                }
+              }
+            }
+          ],
+          "id": 32
+        }
+      ]
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    grafana_dashboard: "1"
+  name: grafana-dashboard-lab-github
+  namespace: monitoring

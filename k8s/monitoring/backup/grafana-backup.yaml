@@ -1,0 +1,131 @@
+# Grafana DB 주간 백업 → GCS (버킷: Terraform modules/grafana-backup)
+# - 대상: PV kps-grafana의 grafana.db (사용자·승인 목록·서비스계정 토큰·org 설정). 대시보드는 Git이 원본이라 제외
+# - 방식: PV를 읽기 전용으로 마운트 → sqlite 온라인 백업 API로 일관된 사본 → integrity_check → gzip → GCS 업로드
+#   RWO 디스크라 Grafana 파드와 같은 노드에 떠야 함 → podAffinity. Grafana가 꺼진 시간엔 못 뜨므로 평일 낮 실행
+# - 인증: Workload Identity Federation (KSA monitoring/grafana-backup → objectCreator, 생성만 가능)
+# - 이미지: python 표준 라이브러리만 사용 (budget-guard와 동일)
+#
+# 복구 절차 (PV가 손상·초기화됐을 때):
+#   1) gcloud storage ls gs://<프로젝트>-grafana-backup/grafana/    → 최신 파일 선택
+#   2) gcloud storage cp gs://.../grafana-<시각>.db.gz . ; gzip -d 로 grafana.db 준비
+#   3) kubectl scale deploy kps-grafana -n monitoring --replicas=0
+#   4) PV를 쓰기 가능으로 마운트한 임시 파드(runAsUser 472)로 grafana.db 교체 (kubectl cp)
+#   5) kubectl scale deploy kps-grafana -n monitoring --replicas=1
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-backup
+  namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-backup-script
+  namespace: monitoring
+data:
+  backup.py: |
+    """Grafana sqlite DB -> consistent copy -> integrity check -> gzip -> GCS (WIF)."""
+    import datetime, gzip, json, os, shutil, sqlite3, urllib.parse, urllib.request
+
+    SRC = "/grafana/grafana.db"
+    BUCKET = os.environ["BUCKET"]
+    TMP = "/work/grafana.db"
+
+    def log(msg):
+        print(f"{datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')} {msg}", flush=True)
+
+    def token():
+        req = urllib.request.Request(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.load(r)["access_token"]
+
+    def main():
+        src = sqlite3.connect(f"file:{SRC}?mode=ro", uri=True)
+        dst = sqlite3.connect(TMP)
+        src.backup(dst)  # 쓰기 중이어도 일관된 사본
+        src.close()
+        check = dst.execute("PRAGMA integrity_check").fetchone()[0]
+        users = dst.execute("SELECT count(*) FROM user").fetchone()[0]
+        dst.close()
+        if check != "ok":
+            raise SystemExit(f"integrity_check failed: {check}")
+        with open(TMP, "rb") as f_in, gzip.open(TMP + ".gz", "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        size = os.path.getsize(TMP + ".gz")
+        name = "grafana/grafana-" + datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M") + ".db.gz"
+        url = (f"https://storage.googleapis.com/upload/storage/v1/b/{BUCKET}/o?uploadType=media&name="
+               + urllib.parse.quote(name, safe=""))
+        with open(TMP + ".gz", "rb") as f:
+            req = urllib.request.Request(url, data=f.read(), method="POST",
+                                         headers={"Authorization": f"Bearer {token()}",
+                                                  "Content-Type": "application/gzip"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            obj = json.load(r)
+        log(f"backup ok: gs://{BUCKET}/{obj['name']} {size} bytes, users={users}, integrity={check}")
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: grafana-backup
+  namespace: monitoring
+spec:
+  schedule: "0 12 * * 3" # 매주 수요일 12:00 (Grafana 가동 시간)
+  timeZone: Asia/Seoul
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800 # Grafana가 꺼져 있어 못 뜨면 30분 뒤 실패로 드러남
+      ttlSecondsAfterFinished: 604800
+      template:
+        spec:
+          serviceAccountName: grafana-backup
+          restartPolicy: Never
+          nodeSelector:
+            cloud.google.com/gke-spot: "true"
+          # RWO PV는 같은 노드에서만 동시 마운트 가능 → Grafana 파드 옆에 배치
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: grafana
+                      app.kubernetes.io/instance: kps
+                  topologyKey: kubernetes.io/hostname
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 472 # Grafana와 같은 UID/GID (grafana.db 읽기 권한)
+            runAsGroup: 472
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: backup
+              image: python:3.13.18-alpine3.24
+              command: ["python", "/app/backup.py"]
+              env:
+                - { name: BUCKET, value: my-gcp-project-grafana-backup }
+                - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 200Mi }
+                limits: { memory: 64Mi }
+              volumeMounts:
+                - { name: script, mountPath: /app, readOnly: true }
+                - { name: grafana, mountPath: /grafana, readOnly: true }
+                - { name: work, mountPath: /work }
+          volumes:
+            - name: script
+              configMap: { name: grafana-backup-script }
+            - name: grafana
+              persistentVolumeClaim: { claimName: kps-grafana, readOnly: true }
+            - name: work
+              emptyDir: { sizeLimit: 150Mi }

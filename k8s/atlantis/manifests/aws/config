@@ -1,0 +1,9 @@
+# Atlantis 파드용 AWS 프로필 (AWS_CONFIG_FILE=/etc/aws/config)
+# 토큰: KSA atlantis projected 토큰(audience sts.amazonaws.com, kubelet 이 자동 갱신)
+# 역할: infra-terraform/_bootstrap 이 만든 프로젝트별 역할 (신뢰 = GKE lab 클러스터 OIDC + sub system:serviceaccount:atlantis:atlantis)
+
+[profile test]
+role_arn = arn:aws:iam::111122223333:role/test-live-atlantis
+web_identity_token_file = /var/run/secrets/aws/token
+role_session_name = atlantis
+region = ap-northeast-2

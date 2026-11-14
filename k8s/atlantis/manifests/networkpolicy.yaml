@@ -1,0 +1,38 @@
+# atlantis 네임스페이스 네트워크 정책
+# - 기본: 모든 인바운드 차단
+# - Atlantis 4141: monitoring 네임스페이스 cloudflared(공용 터널 lab-grafana)에서만 (외부 경로는 터널 하나)
+#   + monitoring 네임스페이스 Prometheus 의 지표 수집(/metrics). 외부 공개 경로는 여전히 /events 만(Cloudflare WAF)
+# ※ kubectl port-forward(UI 확인용)는 kubelet 경유라 영향 없음
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atlantis-from-cloudflared
+spec:
+  podSelector:
+    matchLabels:
+      app: atlantis
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudflared
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - { protocol: TCP, port: 4141 }

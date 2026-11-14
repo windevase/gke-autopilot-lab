@@ -1,0 +1,24 @@
+# Cloudflare Tunnel 커넥터 (ConfigMap 라우팅 + Deployment + PodMonitor)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudflared
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:windevase/gcp.git
+    targetRevision: main
+    path: k8s/monitoring/cloudflared
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  # replicas는 Git이 아니라 오프아워 스케일러·budget-guard·Operator 0 운영이 정함 → 무시
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers: [/spec/replicas]
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # Git = 원본. 클러스터에서 직접 바꾼 내용은 되돌려짐
+    syncOptions:
+      - RespectIgnoreDifferences=true

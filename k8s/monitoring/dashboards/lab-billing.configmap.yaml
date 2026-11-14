@@ -1,0 +1,1068 @@
+apiVersion: v1
+data:
+  lab-billing.json: |
+    {
+      "uid": "lab-billing",
+      "title": "Lab · 실제 청구액",
+      "description": "BigQuery 결제 내보내기 기반 실제 비용·크레딧·월말 예상, 파드 requests 추정치와 비교",
+      "tags": [
+        "lab",
+        "cost",
+        "billing"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "1h",
+      "time": {
+        "from": "now-30d",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "budget_krw",
+            "type": "constant",
+            "hide": 2,
+            "query": "15000",
+            "label": "월 예산(원)"
+          },
+          {
+            "name": "cpu_rate",
+            "type": "constant",
+            "hide": 2,
+            "query": "0.0133"
+          },
+          {
+            "name": "mem_rate",
+            "type": "constant",
+            "hide": 2,
+            "query": "0.0014767"
+          }
+        ]
+      },
+      "annotations": {
+        "list": []
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "이번 달 요약 (청구월, 태평양 시간 기준)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1
+        },
+        {
+          "type": "stat",
+          "title": "사용액 (할인 전)",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "결제 데이터는 1~2일 늦게 들어오므로 최근 하루 이틀은 적게 보임",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyKRW",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SUM(cost)), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 2
+        },
+        {
+          "type": "stat",
+          "title": "크레딧·할인",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "무료 티어, 프로모션(Developer Program) 크레딧, 할인 등 (음수)",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyKRW",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 3
+        },
+        {
+          "type": "stat",
+          "title": "순 청구액",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "실제로 결제될 금액. 크레딧 안에서 운영 중이면 0에 가까움",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyKRW",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5000
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 4
+        },
+        {
+          "type": "gauge",
+          "title": "예산 대비 (₩$budget_krw)",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "예산과 같은 기준(무료 티어만 차감, 프로모션 크레딧 차감 전). 100%면 budget-guard가 워크로드를 0으로 내림",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.5
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.9
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdMarkers": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(SAFE_DIVIDE(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c WHERE c.type = 'FREE_TIER'), 0)), $budget_krw), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 5
+        },
+        {
+          "type": "stat",
+          "title": "월말 예상 (순 청구액)",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "지금까지 순 청구액 ÷ 이번 달 경과 비율. 결제 데이터는 1~2일 늦게 들어오므로 최근 하루 이틀은 적게 보임 (예상치도 약간 낮게 나옴)",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyKRW",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5000
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SAFE_DIVIDE(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH, 'America/Los_Angeles'), SECOND) / (86400 * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE('America/Los_Angeles')))))), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 6
+        },
+        {
+          "type": "stat",
+          "title": "확인 중인 SKU 순액",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "Network Intelligence Center 3종(100% 할인 대상) + PSC Partner Select 엔드포인트. 할인이 붙으면 0이어야 정상",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyKRW",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 3000
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles') AND (sku.description LIKE 'Network Intelligence Center%' OR sku.description LIKE '%Private Service Connect Partner%')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 7
+        },
+        {
+          "type": "row",
+          "title": "추정 vs 실제 (USD, 월 환산)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 5
+          },
+          "id": 8
+        },
+        {
+          "type": "stat",
+          "title": "추정: 파드 requests 기반 (최근 7일)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "비용 & 용량 대시보드와 같은 계산 (PV 제외). Spot 단가 변수 cpu_rate/mem_rate",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "(avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) * $cpu_rate + avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) / 2^30 * $mem_rate) * 730",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 9
+        },
+        {
+          "type": "stat",
+          "title": "실제: Kubernetes Engine 월말 예상",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "Kubernetes Engine 서비스의 할인 전 사용액 (파드 요금 + 클러스터 관리비 포함 — 관리비는 무료 티어 크레딧으로 상쇄)",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SAFE_DIVIDE(SUM(cost / currency_conversion_rate), TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH, 'America/Los_Angeles'), SECOND) / (86400 * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE('America/Los_Angeles'))))), 2), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles') AND service.description = 'Kubernetes Engine'",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 10
+        },
+        {
+          "type": "stat",
+          "title": "실제: 전체 월말 예상 (할인 전)",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "모든 서비스 합계 (크레딧 차감 전)",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SAFE_DIVIDE(SUM(cost / currency_conversion_rate), TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH, 'America/Los_Angeles'), SECOND) / (86400 * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE('America/Los_Angeles'))))), 2), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 11
+        },
+        {
+          "type": "stat",
+          "title": "실제: 전체 월말 예상 (순액)",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "크레딧 차감 후 실제 결제 예상. $10 크레딧 안이면 0 근처",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 10
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT IFNULL(ROUND(SAFE_DIVIDE(SUM((cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) / currency_conversion_rate), TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH, 'America/Los_Angeles'), SECOND) / (86400 * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE('America/Los_Angeles'))))), 2), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "id": 12
+        },
+        {
+          "type": "row",
+          "title": "추이",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 10
+          },
+          "id": 13
+        },
+        {
+          "type": "timeseries",
+          "title": "일별 사용액 (서비스별, 할인 전)",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "결제 데이터는 1~2일 늦게 들어오므로 최근 하루 이틀은 적게 보임",
+          "gridPos": {
+            "h": 8,
+            "w": 14,
+            "x": 0,
+            "y": 11
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyKRW",
+              "custom": {
+                "drawStyle": "bars",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT TIMESTAMP_TRUNC(usage_start_time, DAY, 'America/Los_Angeles') AS time, service.description AS service, ROUND(SUM(cost), 1) AS cost FROM `billing_export.gcp_billing_export_v1_*` WHERE usage_start_time >= TIMESTAMP_MILLIS($__from) AND usage_start_time < TIMESTAMP_MILLIS($__to) GROUP BY 1, 2 ORDER BY 1",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 0,
+              "location": "US"
+            }
+          ],
+          "id": 14
+        },
+        {
+          "type": "timeseries",
+          "title": "이번 달 누적 (사용액 vs 순 청구액)",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "두 선의 차이가 크레딧·할인으로 상쇄된 금액",
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 14,
+            "y": 11
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyKRW",
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT day AS time, SUM(gross) OVER (ORDER BY day) AS `누적 사용액`, SUM(net) OVER (ORDER BY day) AS `누적 순 청구액` FROM (SELECT TIMESTAMP_TRUNC(usage_start_time, DAY, 'America/Los_Angeles') AS day, SUM(cost) AS gross, SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS net FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles') GROUP BY 1) ORDER BY 1",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 0,
+              "location": "US"
+            }
+          ],
+          "id": 15
+        },
+        {
+          "type": "row",
+          "title": "상세 (이번 달)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 19
+          },
+          "id": 16
+        },
+        {
+          "type": "table",
+          "title": "SKU별 비용",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "순액이 0보다 크면 크레딧으로 상쇄되지 않은 항목",
+          "gridPos": {
+            "h": 10,
+            "w": 16,
+            "x": 0,
+            "y": 20
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "사용액"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "currencyKRW"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "크레딧·할인"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "currencyKRW"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "순액"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "currencyKRW"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT service.description AS service, sku.description AS sku, ROUND(SUM(usage.amount_in_pricing_units), 3) AS usage_amount, ANY_VALUE(usage.pricing_unit) AS unit, ROUND(SUM(cost), 1) AS gross_krw, ROUND(SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 1) AS credits_krw, ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 1) AS net_krw FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles') GROUP BY 1, 2 HAVING ABS(SUM(cost)) > 0 OR ABS(SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))) > 0 ORDER BY gross_krw DESC",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                },
+                "renameByName": {
+                  "service": "서비스",
+                  "sku": "SKU",
+                  "usage_amount": "사용량",
+                  "unit": "단위",
+                  "gross_krw": "사용액",
+                  "credits_krw": "크레딧·할인",
+                  "net_krw": "순액"
+                }
+              }
+            }
+          ],
+          "id": 17
+        },
+        {
+          "type": "table",
+          "title": "크레딧·할인 종류별",
+          "datasource": {
+            "type": "grafana-bigquery-datasource",
+            "uid": "bigquery-billing"
+          },
+          "description": "FREE_TIER(무료 티어), PROMOTION(Developer Program 크레딧), DISCOUNT 등",
+          "gridPos": {
+            "h": 10,
+            "w": 8,
+            "x": 16,
+            "y": 20
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "금액"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "currencyKRW"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-bigquery-datasource",
+                "uid": "bigquery-billing"
+              },
+              "refId": "A",
+              "rawSql": "SELECT c.type AS type, c.name AS name, ROUND(SUM(c.amount), 1) AS amount FROM `billing_export.gcp_billing_export_v1_*`, UNNEST(credits) AS c WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles') GROUP BY 1, 2 ORDER BY amount",
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": 1,
+              "location": "US"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                },
+                "renameByName": {
+                  "type": "종류",
+                  "name": "이름",
+                  "amount": "금액"
+                }
+              }
+            }
+          ],
+          "id": 18
+        }
+      ]
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    grafana_dashboard: "1"
+  name: grafana-dashboard-lab-billing
+  namespace: monitoring

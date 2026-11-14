@@ -1,0 +1,17 @@
+# Atlantis 저장소 설정 — 프로젝트 목록만. workflow(gcp-platform)·승인 조건·감시는 서버 측(k8s/atlantis/values.yaml repoConfig)
+# platform/ 만 Atlantis 대상. 루트(bootstrap: GKE·네트워크·예산·kill switch·Atlantis 권한)는 로컬 tf.ps1 로만 apply
+version: 3
+automerge: true # apply 가 모두 성공하면 Atlantis 가 PR 을 merge
+parallel_plan: false
+parallel_apply: false
+projects:
+  - name: platform
+    dir: platform
+    autoplan:
+      enabled: true
+      when_modified:
+        - "*.tf"
+        - ".terraform.lock.hcl"
+        - "../modules/cloudflare-tunnel/*.tf"
+        - "../modules/billing-export/*.tf"
+        - "../modules/grafana-backup/*.tf"

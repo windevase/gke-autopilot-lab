@@ -1,0 +1,270 @@
+# 예산 초과 자동 차단 (kill switch)
+# - 예산(₩15,000, 크레딧 차감 전 사용액 기준)이 Pub/Sub 토픽 budget-alerts로 비용 갱신을 수시 발행
+# - 이 CronJob이 매시간 구독(budget-guard)에서 pull → 이번 달 사용액/예산 >= THRESHOLD(1.0)이면:
+#     Grafana, cloudflared, kube-state-metrics, Prometheus → 0  +  평일 기동 CronJob(grafana-scale-up) 정지
+#   (이후에도 매시간 다시 0으로 강제 → 누가 수동으로 올려도 다시 내려감)
+# - GCP 인증: Workload Identity(KSA monitoring/budget-guard → 구독 subscriber, Terraform modules/budget-guard)
+# - 컨트롤 플레인이 이 PC IP만 허용하므로 Cloud Functions 대신 클러스터 안에서 처리
+# - 비용: Spot 50m/64Mi 파드가 매시간 수 초 → 월 ~$0.01
+# - 복구(다음 달 또는 예산 상향 후): CLAUDE.md "예산 자동 차단" 절차 참고
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: budget-guard
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: budget-guard
+  namespace: monitoring
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    resourceNames: ["kps-grafana", "cloudflared", "kps-kube-state-metrics"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets/scale"]
+    resourceNames: ["prometheus-kps-kube-prometheus-stack"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    resourceNames: ["grafana-scale-up"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: budget-guard
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: budget-guard
+subjects:
+  - kind: ServiceAccount
+    name: budget-guard
+    namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: budget-guard-script
+  namespace: monitoring
+data:
+  guard.py: |
+    """Budget kill switch: pull budget notifications from Pub/Sub, scale workloads to 0 when over budget."""
+    import base64, datetime, json, os, ssl, urllib.request
+
+    PROJECT = os.environ["PROJECT"]
+    SUB = os.environ["SUBSCRIPTION"]
+    THRESHOLD = float(os.environ.get("THRESHOLD", "1.0"))
+    DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
+    NS = "monitoring"
+    DEPLOYMENTS = ["kps-grafana", "cloudflared", "kps-kube-state-metrics"]
+    STATEFULSETS = ["prometheus-kps-kube-prometheus-stack"]
+    CRONJOBS_TO_SUSPEND = ["grafana-scale-up"]
+
+    def log(msg):
+        print(f"{datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')} {msg}", flush=True)
+
+    def http(method, url, headers, body=None, ctx=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
+        with urllib.request.urlopen(req, timeout=20, context=ctx) as r:
+            raw = r.read()
+            return json.loads(raw) if raw else {}
+
+    def gcp_token():
+        return http("GET", "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+                    {"Metadata-Flavor": "Google"})["access_token"]
+
+    def pull_all(tok):
+        base = f"https://pubsub.googleapis.com/v1/projects/{PROJECT}/subscriptions/{SUB}"
+        hdr = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
+        msgs = []
+        for _ in range(20):
+            res = http("POST", f"{base}:pull", hdr, {"maxMessages": 100})
+            batch = res.get("receivedMessages", [])
+            if not batch:
+                break
+            msgs += batch
+            http("POST", f"{base}:acknowledge", hdr, {"ackIds": [m["ackId"] for m in batch]})
+        return msgs
+
+    def k8s_patch(path, body):
+        sa = "/var/run/secrets/kubernetes.io/serviceaccount"
+        tok = open(f"{sa}/token").read()
+        ctx = ssl.create_default_context(cafile=f"{sa}/ca.crt")
+        hdr = {"Authorization": f"Bearer {tok}", "Content-Type": "application/merge-patch+json"}
+        return http("PATCH", f"https://kubernetes.default.svc{path}", hdr, body, ctx)
+
+    def main():
+        msgs = pull_all(gcp_token())
+        now = datetime.datetime.now(datetime.timezone.utc)
+        worst = None
+        for m in msgs:
+            try:
+                d = json.loads(base64.b64decode(m["message"].get("data", "")))
+                start = datetime.datetime.fromisoformat(d["costIntervalStart"].replace("Z", "+00:00"))
+                if (now - start).days > 32:  # 지난 달 알림은 무시
+                    continue
+                ratio = float(d["costAmount"]) / float(d["budgetAmount"])
+                log(f"notice: cost={d['costAmount']} budget={d['budgetAmount']} {d.get('currencyCode','')} "
+                    f"ratio={ratio:.3f} interval={d['costIntervalStart']}")
+                worst = ratio if worst is None else max(worst, ratio)
+            except Exception as e:  # 형식이 다른 메시지는 건너뜀
+                log(f"skip malformed message: {e}")
+        log(f"messages={len(msgs)} max_ratio={worst} threshold={THRESHOLD} dry_run={DRY_RUN}")
+        if worst is None or worst < THRESHOLD:
+            log("under budget: no action")
+            return
+        log("OVER BUDGET: scaling workloads to 0")
+        for name in DEPLOYMENTS:
+            if not DRY_RUN:
+                k8s_patch(f"/apis/apps/v1/namespaces/{NS}/deployments/{name}/scale", {"spec": {"replicas": 0}})
+            log(f"  deployment/{name} -> 0")
+        for name in STATEFULSETS:
+            if not DRY_RUN:
+                k8s_patch(f"/apis/apps/v1/namespaces/{NS}/statefulsets/{name}/scale", {"spec": {"replicas": 0}})
+            log(f"  statefulset/{name} -> 0")
+        for name in CRONJOBS_TO_SUSPEND:
+            if not DRY_RUN:
+                k8s_patch(f"/apis/batch/v1/namespaces/{NS}/cronjobs/{name}", {"spec": {"suspend": True}})
+            log(f"  cronjob/{name} suspended")
+
+    def self_test():
+        """kill switch가 실제로 동작할 수 있는지 점검 (아무것도 바꾸지 않음)
+        1) WIF 토큰 → Pub/Sub pull (ack하지 않고 즉시 반납 → 정시 실행이 그대로 소비)
+        2) 차단 대상마다 서버 측 dry-run PATCH (?dryRun=All) → RBAC·대상 존재 확인
+        하나라도 실패하면 exit 1 → Job 실패 → 대시보드 '실패한 Job'·CronJob 상태에 표시"""
+        ok = True
+        try:
+            tok = gcp_token()
+            base = f"https://pubsub.googleapis.com/v1/projects/{PROJECT}/subscriptions/{SUB}"
+            hdr = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
+            got = http("POST", f"{base}:pull", hdr, {"maxMessages": 10}).get("receivedMessages", [])
+            if got:
+                http("POST", f"{base}:modifyAckDeadline", hdr,
+                     {"ackIds": [m["ackId"] for m in got], "ackDeadlineSeconds": 0})
+            log(f"selftest pubsub: OK (pulled {len(got)}, released without ack)")
+        except Exception as e:
+            ok = False
+            log(f"selftest pubsub: FAIL {e}")
+        targets = [(f"/apis/apps/v1/namespaces/{NS}/deployments/{n}/scale", {"spec": {"replicas": 0}}) for n in DEPLOYMENTS]
+        targets += [(f"/apis/apps/v1/namespaces/{NS}/statefulsets/{n}/scale", {"spec": {"replicas": 0}}) for n in STATEFULSETS]
+        targets += [(f"/apis/batch/v1/namespaces/{NS}/cronjobs/{n}", {"spec": {"suspend": True}}) for n in CRONJOBS_TO_SUSPEND]
+        for path, body in targets:
+            try:
+                k8s_patch(path + "?dryRun=All", body)
+                log(f"selftest rbac: OK   {path}")
+            except Exception as e:
+                ok = False
+                log(f"selftest rbac: FAIL {path} {e}")
+        log("selftest result: " + ("PASS" if ok else "FAIL"))
+        if not ok:
+            raise SystemExit(1)
+
+    if __name__ == "__main__":
+        if os.environ.get("SELF_TEST", "false").lower() == "true":
+            self_test()
+        else:
+            main()
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: budget-guard
+  namespace: monitoring
+spec:
+  schedule: "17 * * * *" # 매시 17분
+  timeZone: Asia/Seoul
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: budget-guard
+          restartPolicy: OnFailure
+          nodeSelector:
+            cloud.google.com/gke-spot: "true"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: guard
+              image: python:3.13.18-alpine3.24 # 재현성 위해 패치 버전까지 고정 (2026-11-08)
+              command: ["python", "/app/guard.py"]
+              env:
+                - { name: PROJECT, value: my-gcp-project }
+                - { name: SUBSCRIPTION, value: budget-guard }
+                - { name: THRESHOLD, value: "1.0" }
+                - { name: DRY_RUN, value: "false" }
+                - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+              volumeMounts:
+                - { name: script, mountPath: /app, readOnly: true }
+          volumes:
+            - name: script
+              configMap: { name: budget-guard-script }
+---
+# kill switch 자가 점검: 매월 1회 Pub/Sub 인증 + 차단 대상 RBAC를 dry-run으로 확인 (변경 없음)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: budget-guard-selftest
+  namespace: monitoring
+spec:
+  schedule: "0 10 1 * *" # 매월 1일 10:00 (KST)
+  timeZone: Asia/Seoul
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0 # 실패를 그대로 드러냄 (재시도로 가리지 않음)
+      ttlSecondsAfterFinished: 604800 # 결과를 7일 보관
+      template:
+        spec:
+          serviceAccountName: budget-guard
+          restartPolicy: Never
+          nodeSelector:
+            cloud.google.com/gke-spot: "true"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: guard
+              image: python:3.13.18-alpine3.24 # 재현성 위해 패치 버전까지 고정 (2026-11-08)
+              command: ["python", "/app/guard.py"]
+              env:
+                - { name: PROJECT, value: my-gcp-project }
+                - { name: SUBSCRIPTION, value: budget-guard }
+                - { name: THRESHOLD, value: "1.0" }
+                - { name: DRY_RUN, value: "true" }
+                - { name: SELF_TEST, value: "true" }
+                - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+              volumeMounts:
+                - { name: script, mountPath: /app, readOnly: true }
+          volumes:
+            - name: script
+              configMap: { name: budget-guard-script }

@@ -1,0 +1,11 @@
+# 저장소에는 LF로 저장 (CRLF 경고 방지, CI(Linux)와 동일)
+* text=auto eol=lf
+
+# Windows 스크립트는 작업 폴더에서 CRLF 유지
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 바이너리
+*.png binary
+*.jpg binary

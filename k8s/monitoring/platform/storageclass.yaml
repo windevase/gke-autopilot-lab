@@ -1,0 +1,11 @@
+# pd-standard(HDD) + WaitForFirstConsumer: 가장 저렴한 디스크, 파드와 같은 존에 생성
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pd-standard-wffc
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-standard
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete

@@ -1,0 +1,36 @@
+# kube-prometheus-stack: 공식 차트 + Git의 values (멀티 소스)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kps
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 93.3.0
+      helm:
+        releaseName: kps # 기존 helm 릴리스와 같은 리소스 이름 유지
+        # CRD(Prometheus Operator, 수 MB)는 Argo CD가 관리하지 않음: 비교·적용 때 컨트롤러 메모리가 512Mi를 넘어
+        # OOMKilled 반복 (실측). CRD는 클러스터에 이미 설치돼 있고, 차트 버전을 올릴 때만 수동 적용
+        # (kubectl apply --server-side -f <차트의 crds>)
+        skipCrds: true
+        valueFiles:
+          - $values/k8s/monitoring/kps/values.yaml
+    - repoURL: git@github.com:windevase/gcp.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  # replicas는 Git이 아니라 오프아워 스케일러·budget-guard·Operator 0 운영이 정함 → 무시
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers: [/spec/replicas]
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # Git = 원본. 클러스터에서 직접 바꾼 내용은 되돌려짐
+    syncOptions:
+      - RespectIgnoreDifferences=true
+      - ServerSideApply=true # CRD가 커서 client-side apply 주석 크기 제한(256KB) 초과

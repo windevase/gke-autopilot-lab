@@ -1,0 +1,45 @@
+# --- 비밀값 (절대 커밋 금지) ---
+secret/
+*.pem
+*credentials*.json
+client_secret_*.json
+
+# --- Terraform state / plan (state에 비밀값 포함, 원격 state는 GCS) ---
+*.tfstate
+*.tfstate.*
+tfplan
+*.tfplan
+.terraform/
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# .terraform.lock.hcl 은 커밋 (provider 버전 고정)
+
+# --- 이전 e2-small VM 코드 + 로컬 state (사용 안 함) ---
+archive/
+
+# --- 이 프로젝트와 무관한 파일 ---
+config.json
+config.yaml
+docker-compose.yml
+*.log
+
+# --- 작업 중 임시 파일 ---
+cm.tmp.yaml
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# --- Claude 작업 메모 (계정 ID·운영 기록 포함, 로컬 전용) ---
+CLAUDE.md
+
+# --- 환경별 값 (계정·결제 ID, IP 등) — *.example 만 커밋 ---
+*.tfvars
+!*.tfvars.example
+backend.hcl

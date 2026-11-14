@@ -1,0 +1,198 @@
+# Grafana + cloudflared(외부 접속 터널) + Argo CD만 평일 10:00~20:00(KST) 가동, 그 외 시간·주말 정지
+# - Prometheus / kube-state-metrics / Operator는 24시간 유지 → 지표 공백 없이 7일 추이 확보
+# - Argo CD가 꺼진 시간에는 자동 동기화도 멈춤 → 다음 기동 때 Git과의 차이를 따라잡음
+# - 클러스터 안 CronJob이라 PC가 꺼져 있어도 동작
+# - 이미지: 공식 registry.k8s.io/kubectl (distroless, 셸 없음 → 네임스페이스별로 컨테이너 분리)
+# - 권한: 대상 Deployment/StatefulSet의 scale만 허용 (monitoring, argocd, atlantis 네임스페이스 각각 Role)
+# - budget-guard가 예산 초과 시 grafana-scale-up을 suspend → Argo CD도 아침에 안 켜짐
+# - Atlantis: 켜는 것은 수동(tools/atlantis.ps1 on), **끄는 것은 20:00 에 자동**(켜 둔 채 잊는 것 방지, 2026-11-14).
+#   진행 중 plan/apply 는 terminationGracePeriodSeconds(600s) 안에서 마무리 — 20:00 직전에는 apply 를 시작하지 않는다
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: offhours-scaler
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: offhours-scaler
+  namespace: monitoring
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["kps-grafana", "cloudflared"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: offhours-scaler
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: offhours-scaler
+subjects:
+  - kind: ServiceAccount
+    name: offhours-scaler
+    namespace: monitoring
+---
+# Argo CD 컴포넌트 scale 권한 (argocd 네임스페이스, 같은 ServiceAccount)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: offhours-scaler
+  namespace: argocd
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["argocd-server", "argocd-repo-server", "argocd-redis"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "statefulsets/scale"]
+    resourceNames: ["argocd-application-controller"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: offhours-scaler
+  namespace: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: offhours-scaler
+subjects:
+  - kind: ServiceAccount
+    name: offhours-scaler
+    namespace: monitoring
+---
+# Atlantis 종료 권한 (atlantis 네임스페이스, 같은 ServiceAccount) — scale 0 만 사용(기동은 수동)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: offhours-scaler
+  namespace: atlantis
+rules:
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "statefulsets/scale"]
+    resourceNames: ["atlantis"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: offhours-scaler
+  namespace: atlantis
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: offhours-scaler
+subjects:
+  - kind: ServiceAccount
+    name: offhours-scaler
+    namespace: monitoring
+---
+# 매일 20:00 Grafana·cloudflared·Argo CD·Atlantis 종료 (주말엔 이미 꺼져 있으므로 영향 없음)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: grafana-scale-down
+  namespace: monitoring
+spec:
+  schedule: "0 20 * * *"
+  timeZone: Asia/Seoul
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: offhours-scaler
+          restartPolicy: OnFailure
+          nodeSelector:
+            cloud.google.com/gke-spot: "true"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: grafana-to-zero
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment", "kps-grafana", "cloudflared", "-n", "monitoring", "--replicas=0"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+            - name: argocd-to-zero
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment/argocd-server", "deployment/argocd-repo-server", "deployment/argocd-redis",
+                     "statefulset/argocd-application-controller", "-n", "argocd", "--replicas=0"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+            - name: atlantis-to-zero
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "statefulset/atlantis", "-n", "atlantis", "--replicas=0"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+---
+# 평일 10:00 Grafana·cloudflared·Argo CD 기동 (금 20시 종료 → 월 10시 기동)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: grafana-scale-up
+  namespace: monitoring
+spec:
+  schedule: "0 10 * * 1-5"
+  timeZone: Asia/Seoul
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: offhours-scaler
+          restartPolicy: OnFailure
+          nodeSelector:
+            cloud.google.com/gke-spot: "true"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: grafana-to-one
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment", "kps-grafana", "cloudflared", "-n", "monitoring", "--replicas=1"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+            - name: argocd-to-one
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment/argocd-server", "deployment/argocd-repo-server", "deployment/argocd-redis",
+                     "statefulset/argocd-application-controller", "-n", "argocd", "--replicas=1"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
