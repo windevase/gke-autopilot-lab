@@ -8,7 +8,11 @@ Cloudflare Tunnel로 외부에 공개한 포트폴리오용 실습 환경입니�
 클라우드 리소스 변경(이 저장소의 `platform/` 계층, 별도 저장소의 AWS 프로젝트)은 클러스터 안의 **Atlantis**가 PR 단위로 plan·apply합니다.
 사람은 채팅으로만 승인하고, AI 에이전트가 PR 작성·보고·승인 기록을 맡으며, 감시·사후 감사가 그 과정을 강제합니다 ([Terraform CI/CD](#terraform-cicd-atlantis--채팅-승인)).
 
-**목표:** 운영 품질(보안·관측성·자동화)은 지키면서 비용은 최소로 유지합니다. 예상 비용은 **월 약 $5**입니다 (Prometheus 이중화 + Thanos, Argo CD 포함).
+**목표:** 운영 품질(보안·관측성·자동화)은 지키면서 비용은 최소로 유지합니다. 예상 비용은 **월 약 $5.2**입니다 (Prometheus 이중화 + Thanos, Argo CD, Atlantis 포함).
+
+> **저장소 구성:** 운영은 private 저장소에서 하고, 공개 저장소 [gke-autopilot-lab](https://github.com/windevase/gke-autopilot-lab)에는 검사를 통과한 **스냅샷**만 올립니다.
+> 공개본에서는 계정 식별 정보(프로젝트 ID·도메인·계정 ID 등)를 `my-gcp-project`, `example.com` 같은 예시 값으로 바꾸고,
+> private 토큰이 있어야 동작하는 워크플로(승인 후 apply, 사후 감사)는 제외했습니다.
 
 ## 구성
 
@@ -58,6 +62,7 @@ flowchart LR
   atlantis -->|plan: 읽기 역할 / apply: 쓰기 역할<br/>GKE OIDC · 키 없음| aws[(AWS<br/>terraform 프로젝트)]
   atlantis -->|WIF · IAM 조건| gcpp[(GCP · Cloudflare<br/>platform 계층)]
   grafana -->|읽기 전용 PAT| ghapi[(GitHub API<br/>PR · Actions · 결제 사용량)]
+  repo -.->|검사 통과 스냅샷<br/>식별 정보 치환| pub[(공개 저장소<br/>포트폴리오)]
 ```
 
 | 구성 요소 | 내용 |
@@ -263,6 +268,7 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
 - **최소 권한:** 백업 계정은 GCS 생성만(덮어쓰기·삭제 불가), budget-guard는 차단 대상 5개 객체만 patch, 오프아워 스케일러는 대상 Deployment/StatefulSet의 scale만
 - **비밀값·환경 정보:** 저장소에 포함하지 않음. 비밀값은 Kubernetes Secret·로컬 파일·환경변수로, 계정 ID·허용 IP 등은 `terraform.tfvars`(Git 제외)로 관리
 - **CI 비밀값 스캔:** push마다 gitleaks로 전체 커밋 기록 검사
+- **공개 저장소:** 운영 저장소를 그대로 공개하지 않고, 식별 정보 치환 + 잔존·비밀값 검사를 통과한 스냅샷만 별도 저장소로 (`tools/publish-public.sh`)
 - **Atlantis:** 외부에는 웹훅 경로만(GitHub IP·POST), 저장소가 workflow·정책을 덮어쓸 수 없는 서버 측 설정, plan은 읽기 전용 AWS 역할, 감시 스크립트는 클러스터 ConfigMap(PR이 고칠 수 없음)
 - **변경 통제:** 원본·사본 스크립트 동일성 CI, main 사후 감사·교차 감사, AI 에이전트 거부 목록(권한 설정으로 강제)
 
@@ -297,16 +303,21 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
 ```
 .
 ├─ main.tf, variables.tf, outputs.tf # bootstrap 계층: 클러스터·예산 차단·Atlantis 권한 (로컬 tf.ps1, GCS 원격 state)
-├─ platform/                         # platform 계층: 터널·결제 내보내기·백업 버킷 (Atlantis 가 plan·apply)
+├─ platform/                         # platform 계층: 터널·결제 내보내기·백업 버킷 (Atlantis 가 plan·apply, 별도 state)
 ├─ atlantis.yaml                     # Atlantis 프로젝트(platform) — workflow·정책은 서버 측
 ├─ terraform.tfvars.example          # 환경별 값 예시 → terraform.tfvars 로 복사 (Git 제외)
 ├─ backend.hcl.example               # state 버킷 예시 → backend.hcl 로 복사 (Git 제외)
 ├─ tf.ps1                            # Terraform 래퍼 (Cloudflare 토큰 주입, init 시 backend.hcl 사용)
 ├─ .github/workflows/ci.yml          # 정적 검증 CI
+├─ .github/workflows/apply-on-approve.yml, policy-audit.yml  # 승인 후 apply·merge, main 사후 감사·교차 감사 (공개본 제외)
+├─ .github/scripts/policy-audit.sh   # 사후 감사 스크립트 (보호 경로 변경의 승인 기록 확인)
 ├─ renovate.json                     # 차트·이미지 버전 업데이트 PR (Actions는 Dependabot)
 ├─ tools/update-myip.ps1             # 공인 IP 변경 시 컨트롤 플레인 허용 IP + WAF 규칙 갱신
 ├─ tools/atlantis.ps1                # Atlantis on/off/status/replan
 ├─ tools/bot-pr.sh, chat-approve.sh  # 봇 PR, 채팅 승인 기록·merge (원본: AWS 저장소, 동일 사본)
+├─ tools/pr-report.py                # PR plan 결과를 채팅 보고용으로 요약
+├─ tools/waf-atlantis.py             # Cloudflare WAF: Atlantis 호스트는 GitHub 웹훅 IP·경로만 (멱등)
+├─ tools/publish-public.sh           # 공개용 스냅샷 생성·검사·push (식별 정보 치환)
 ├─ modules/
 │  ├─ gke/                 # Autopilot 클러스터, VPC, 노드 SA, 예산
 │  ├─ billing-export/      # BigQuery 결제 내보내기 데이터셋 + Grafana 읽기 권한
@@ -323,7 +334,7 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
       ├─ cloudflared/      # 터널 커넥터 (라우팅 ConfigMap + Deployment + PodMonitor)
       ├─ budget-guard/     # 예산 초과 자동 차단 + 월간 자가 점검
       ├─ backup/           # Grafana DB 주간 백업
-      ├─ offhours/         # 평일 주간만 가동 (Grafana·cloudflared·Argo CD)
+      ├─ offhours/         # 평일 10~20시만 가동 (Grafana·cloudflared·Argo CD) + Atlantis 20:00 종료
       ├─ platform/         # StorageClass, NetworkPolicy
       └─ dashboards/       # 대시보드 생성기(gen_*.py, 공통 _dashlib.py) → JSON → ConfigMap
 ```
@@ -354,6 +365,16 @@ gcloud container clusters get-credentials lab --region us-central1 --project <PR
 .\k8s\argocd\install.ps1
 #    저장소 deploy key Secret(repo-gcp) 등록 후 루트 앱 1회 적용 → 나머지는 Git push로 반영
 kubectl apply -f k8s/apps/root.yaml
+
+# 5. platform 계층 (터널·결제 내보내기·백업 버킷) — 최초 1회만 로컬
+#    터널이 있어야 Atlantis 웹훅이 들어오므로 처음엔 로컬에서 만들고, 이후 변경은 PR → Atlantis
+Copy-Item platform\terraform.tfvars.example platform\terraform.tfvars
+.\tf.ps1 -Dir platform init; .\tf.ps1 -Dir platform plan -out=tfplan; .\tf.ps1 -Dir platform apply tfplan
+
+# 6. Atlantis (Argo 앱 atlantis가 배포, 평소 replicas 0)
+#    Secret: atlantis-vcs(웹훅 secret·GitHub App 키), atlantis-guard-github(읽기 전용 PAT), atlantis-gcp-platform(platform 값·Cloudflare 토큰)
+python tools\waf-atlantis.py      # Atlantis 호스트 WAF 규칙
+.\tools\atlantis.ps1 on           # 작업할 때만 켬 (20:00 자동 종료)
 ```
 
 콘솔에서만 할 수 있는 작업:
@@ -361,15 +382,17 @@ kubectl apply -f k8s/apps/root.yaml
 - 결제 데이터의 BigQuery 내보내기 사용 설정 (공개 API 없음)
 - Google OAuth 클라이언트에 리디렉션 URI 등록 (`https://grafana.<도메인>/login/google`, `https://argocd.<도메인>/auth/callback`)
 - Renovate GitHub App 설치 (이 저장소만 선택, Silent mode 해제)
+- Atlantis용 GitHub App 생성·설치 (Contents·Pull requests·Issues 쓰기, 웹훅 secret) — values의 App ID는 **문자열**로
+- Cloudflare 존 WAF 규칙 (Argo CD 관리자 IP, Atlantis 웹훅) — 다른 서비스와 공유하는 존이라 Terraform 밖, API 스크립트로 관리
 
 ## CI
 
-클라우드 자격증명 없이 할 수 있는 정적 검증만 돌립니다. `plan`/`apply`는 로컬에서 실행합니다.
+클라우드 자격증명 없이 할 수 있는 정적 검증만 돌립니다. 실제 plan·apply는 bootstrap 계층은 로컬(`tf.ps1`), platform 계층은 Atlantis가 PR에서 합니다.
 
 | 작업 | 내용 |
 |---|---|
-| Terraform | `fmt -check`, `init -backend=false`, `validate` |
-| Kubernetes | kubeconform으로 매니페스트 검증 + `helm template` 렌더링 결과 검증 (kube-prometheus-stack, Argo CD 각각 values 포함) |
+| Terraform | `fmt -check`, `init -backend=false`, `validate` (bootstrap·platform 두 계층) |
+| Kubernetes | kubeconform으로 매니페스트 검증 + 렌더링 결과 검증 (kube-prometheus-stack·Argo CD `helm template`, Atlantis 차트 + kustomize). 감시 스크립트 `bash -n` |
 | 비밀값 | gitleaks로 전체 커밋 기록 스캔 |
 | Terraform 사전 검사 | Atlantis plan 첫 단계와 같은 검사(base 버전 스크립트) |
 | 사본 동기화 | 감시·승인 스크립트가 원본(AWS 저장소)과 같은지 — 다르면 실패 |
@@ -406,4 +429,7 @@ kubectl apply -f k8s/apps/root.yaml
 | 대시보드 표를 열면 브라우저 탭이 멈춤 | 여러 쿼리 결과를 합치는 `merge`·`groupBy` 변환 | 표마다 쿼리 1개로 분리 |
 | PR 표에서 시각 열이 사라짐 | 공통 표 함수의 기본 제외 항목 `Time` 이 time 형식 필드를 함께 걸러 냄 | GitHub 표에서는 기본 제외를 빼기 |
 | 정책 PR 이 terraform PR 로 오판돼 merge 거부 | Atlantis 는 terraform 이 없는 PR 에도 `atlantis/plan` 0/0 상태를 남김 | 프로젝트별 상태(`atlantis/plan: <프로젝트>`)만 세기 |
+| Atlantis가 CrashLoopBackOff | Helm values의 GitHub App ID를 숫자로 적어 `5.73028e+06`으로 렌더링됨 | App ID를 문자열로 |
+| 수동 동기화 후 꺼 둔 Atlantis가 0으로 되돌아감 | `syncOptions` 없이 수동 동기화를 걸면 앱의 `RespectIgnoreDifferences`가 무시돼 replicas가 Git 값으로 복원 | 수동 동기화는 앱의 syncOptions를 그대로 넣거나, 자동 동기화를 기다림 |
+| import한 Cloudflare 터널 변경이 404 | API가 import한 터널의 `config_src`를 돌려주지 않아 provider가 불필요한 PATCH를 보냄 | `ignore_changes`에 `config_src` 추가 + state에 값 기입 |
 | 관리자 PC에서 Argo CD 접속이 403 | PC가 Cloudflare에 **IPv6**로 접속 → IPv4만 넣은 허용 규칙에 걸림 | IPv6 /64 대역 추가 (개인정보 보호 확장으로 하위 64비트가 바뀜) |
