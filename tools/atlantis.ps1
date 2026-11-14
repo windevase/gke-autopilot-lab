@@ -5,6 +5,8 @@
 # - Argo CD ignores replicas for this app, so manual scale is kept.
 # - Webhooks come through the shared tunnel lab-grafana (monitoring/cloudflared).
 #   'on' also starts that connector if it is off (off-hours); the 20:00 off-hours job stops it again.
+# - OpenBao (ns openbao, temporary cloud credentials) runs only when needed: 'on'/'off' start/stop it together with
+#   Atlantis (local AWS admin profile 'test' needs it), and the 20:00 off-hours job stops it. Argo CD ignores its replicas.
 # - Webhooks sent while Atlantis is off are lost: 'on' (and 'replan') comments "atlantis plan" on open PRs
 #   whose current head commit has no atlantis/plan status yet. Needs gh logged in.
 param([Parameter(Mandatory = $true)][ValidateSet('on', 'off', 'status', 'replan')][string]$Action)
@@ -31,7 +33,10 @@ switch ($Action) {
     $cf = kubectl get deployment cloudflared -n monitoring -o jsonpath='{.spec.replicas}'
     if ($cf -eq '0') { kubectl scale deployment cloudflared -n monitoring --replicas=1 }
     kubectl scale statefulset atlantis -n $ns --replicas=1
+    kubectl scale statefulset openbao -n openbao --replicas=1
     kubectl rollout status statefulset atlantis -n $ns --timeout=300s
+    # OpenBao: static seal unseals automatically; wait until the pod is Ready (unsealed, plugins downloaded)
+    kubectl wait pod/openbao-0 -n openbao --for=condition=Ready --timeout=180s
     kubectl rollout status deployment cloudflared -n monitoring --timeout=120s
     Start-Sleep -Seconds 10   # let the tunnel register before GitHub sends the comment webhooks
     Request-Replan
@@ -41,7 +46,9 @@ switch ($Action) {
     # Do not stop while a plan/apply is running (locks stay in the PVC, but an interrupted apply is unsafe).
     # The shared cloudflared is left as is (Grafana/Argo CD use it; the off-hours job manages it).
     kubectl scale statefulset atlantis -n $ns --replicas=0
+    kubectl scale statefulset openbao -n openbao --replicas=0
   }
 }
 kubectl get statefulset,pods -n $ns
+kubectl get statefulset openbao -n openbao
 kubectl get deployment cloudflared -n monitoring

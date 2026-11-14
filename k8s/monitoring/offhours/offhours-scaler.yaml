@@ -7,6 +7,7 @@
 # - budget-guard가 예산 초과 시 grafana-scale-up을 suspend → Argo CD도 아침에 안 켜짐
 # - Atlantis: 켜는 것은 수동(tools/atlantis.ps1 on), **끄는 것은 20:00 에 자동**(켜 둔 채 잊는 것 방지, 2026-11-14).
 #   진행 중 plan/apply 는 terminationGracePeriodSeconds(600s) 안에서 마무리 — 20:00 직전에는 apply 를 시작하지 않는다
+# - OpenBao(ns openbao): Atlantis 와 같이 켜는 것은 수동(tools/atlantis.ps1 on), 끄는 것은 20:00 자동 (2026-11-15)
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -94,7 +95,33 @@ subjects:
     name: offhours-scaler
     namespace: monitoring
 ---
-# 매일 20:00 Grafana·cloudflared·Argo CD·Atlantis 종료 (주말엔 이미 꺼져 있으므로 영향 없음)
+# OpenBao 종료 권한 (openbao 네임스페이스, 같은 ServiceAccount) — scale 0 만 사용(기동은 수동)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: offhours-scaler
+  namespace: openbao
+rules:
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "statefulsets/scale"]
+    resourceNames: ["openbao"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: offhours-scaler
+  namespace: openbao
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: offhours-scaler
+subjects:
+  - kind: ServiceAccount
+    name: offhours-scaler
+    namespace: monitoring
+---
+# 매일 20:00 Grafana·cloudflared·Argo CD·Atlantis·OpenBao 종료 (주말엔 이미 꺼져 있으므로 영향 없음)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -143,6 +170,15 @@ spec:
             - name: atlantis-to-zero
               image: registry.k8s.io/kubectl:v1.37.2
               args: ["scale", "statefulset/atlantis", "-n", "atlantis", "--replicas=0"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+            - name: openbao-to-zero
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "statefulset/openbao", "-n", "openbao", "--replicas=0"]
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities: { drop: ["ALL"] }

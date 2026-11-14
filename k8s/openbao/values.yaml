@@ -1,0 +1,175 @@
+# OpenBao — 키 대체용 임시 자격 발급 (로컬 PC 의 AWS 영구 키 등을 STS 임시 자격으로 대체)
+# 차트 openbao/openbao 0.30.7 (app v2.7.2) — Argo 앱 k8s/apps/openbao.yaml
+# 정책 원본: windevase/infra-terraform docs/policy/access.md 4장 (lab 시범 구성)
+#
+# 구성 결정 (2026-11-15, 담당자)
+# - 1대(Raft 통합 스토리지), Spot. 오프아워 대상 아님(파드는 계속 가동), 외부 경로(cloudflared)만 오프아워에 꺼짐 → 필요하면 켜서 사용
+# - 봉인 해제: static seal — 키는 수동 Secret openbao-unseal (Git·Argo 밖, 원본은 C:\gcp\secret\openbao-unseal-*.key)
+#   KMS 는 쓰지 않음 — lab·회사 공통(2026-11-15 담당자 결정). 데이터를 풀려면 Secret + PVC 둘 다 필요 → 둘을 같은 곳에 백업하지 않음
+#     kubectl create secret generic openbao-unseal -n openbao --from-file=unseal-1.key=C:\gcp\secret\openbao-unseal-1.key
+# - 외부 진입: 공용 터널 lab-grafana 의 bao.<도메인> + 존 WAF(관리자 PC IP 만, 규칙 'ArgoCD admin PC only' 에 호스트 추가)
+#   클러스터 안 구간(cloudflared → 8200)은 평문 — NetworkPolicy 로 cloudflared 만 허용 (lab 예외, 회사는 TLS)
+# - 사람 로그인: OIDC(lab Google, 회사 Entra ID). 앱·서버는 각자 신원(k8s SA 토큰·인증서) — 키 없음
+# - StatefulSet updateStrategy OnDelete: values·설정 변경 후 kubectl delete pod openbao-0 -n openbao 로 반영(static seal 로 자동 unseal)
+
+global:
+  enabled: true
+
+injector:
+  enabled: false # 앱 사이드카 주입은 아직 안 씀
+
+csi:
+  enabled: false
+
+ui:
+  enabled: false # 별도 UI Service 불필요 — 같은 8200 서비스로 터널이 연결
+
+server:
+  # image tag: 차트 appVersion(v2.7.2) 사용
+  resources:
+    requests: { cpu: 50m, memory: 256Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 256Mi }
+
+  nodeSelector:
+    cloud.google.com/gke-spot: "true"
+  affinity: "" # 1대라 anti-affinity 불필요
+  terminationGracePeriodSeconds: 10 # Spot 상한 25s 안
+
+  statefulSet:
+    securityContext:
+      pod:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      container:
+        allowPrivilegeEscalation: false
+        capabilities: { drop: ["ALL"] }
+
+  dataStorage:
+    enabled: true
+    size: 1Gi
+    storageClass: pd-standard-wffc
+
+  auditStorage:
+    enabled: false # 감사 로그는 초기 설정 때 stdout(file 장치)으로 켬
+
+  # AWS 임시 자격 발급(secrets engine aws, assumed_role) — OpenBao 자신도 키 없음 (Atlantis 와 같은 IRSA 방식)
+  #   KSA openbao/openbao projected 토큰(audience sts.amazonaws.com) → 역할 test-live-openbao → 대상 역할 AssumeRole
+  #   역할은 infra-terraform _bootstrap/openbao.tf (출력 openbao_role)
+  extraEnvironmentVars:
+    AWS_ROLE_ARN: arn:aws:iam::111122223333:role/test-live-openbao
+    AWS_WEB_IDENTITY_TOKEN_FILE: /var/run/secrets/aws/token
+    AWS_REGION: ap-northeast-2
+    AWS_STS_REGIONAL_ENDPOINTS: regional
+    AWS_EC2_METADATA_DISABLED: "true" # GKE 메타데이터 서버를 AWS 자격으로 오인하지 않게
+
+  volumes:
+    # 봉인 해제 키 (수동 Secret, 읽기 전용)
+    - name: unseal
+      secret:
+        secretName: openbao-unseal
+        defaultMode: 0440
+    # 외부 플러그인 내려받는 곳 (기동할 때마다 digest 확인 후 다운로드 — 비워도 됨)
+    - name: plugins
+      emptyDir: { sizeLimit: 256Mi }
+    - name: aws-token
+      projected:
+        sources:
+          - serviceAccountToken: { audience: sts.amazonaws.com, expirationSeconds: 3600, path: token }
+  volumeMounts:
+    - name: unseal
+      mountPath: /openbao/unseal
+      readOnly: true
+    - name: aws-token
+      mountPath: /var/run/secrets/aws
+      readOnly: true
+    - name: plugins
+      mountPath: /openbao/plugins
+
+  networkPolicy:
+    enabled: true
+    ingress:
+      # 8200: 공용 터널 cloudflared(monitoring) 에서만. port-forward 는 kubelet 경유라 영향 없음
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: monitoring
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: cloudflared
+        ports:
+          - { port: 8200, protocol: TCP }
+      # 8201: Raft 클러스터 통신(자기 자신·이후 증설 대비)
+      - from:
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: openbao
+        ports:
+          - { port: 8201, protocol: TCP }
+
+  standalone:
+    enabled: false
+
+  ha:
+    enabled: true
+    replicas: 1
+    # 1대에서 PDB(maxUnavailable 0)는 노드 업그레이드·축소를 막음 → 끔 (Spot 회수는 PDB 무관)
+    disruptionBudget:
+      enabled: false
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = true
+        disable_mlock = true # Raft 권장 + Autopilot 에서 IPC_LOCK 불가
+
+        listener "tcp" {
+          address         = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_disable     = 1 # 터널(cloudflared)이 TLS 종단, 클러스터 안은 NetworkPolicy 로 제한 (lab 예외)
+          # 감사 로그에 실제 호출자 IP — cloudflared(파드 대역)가 붙인 X-Forwarded-For 만 신뢰
+          x_forwarded_for_authorized_addrs = "10.20.0.0/16"
+          x_forwarded_for_reject_not_present = false
+        }
+
+        storage "raft" {
+          path = "/openbao/data"
+        }
+
+        seal "static" {
+          current_key_id = "unseal-1"
+          current_key    = "file:///openbao/unseal/unseal-1.key"
+        }
+
+        service_registration "kubernetes" {}
+
+        # 외부 플러그인 — OpenBao 2.x 는 AWS·GCP·DB 엔진이 내장이 아님(openbao-plugins). 설정 선언 + OCI 이미지 digest 고정
+        plugin_directory         = "/openbao/plugins"
+        plugin_auto_download     = true
+        plugin_download_behavior = "fail" # 받지 못하면 기동 실패(조용히 빠지지 않게)
+
+        plugin "secret" "aws" {
+          image = "ghcr.io/openbao/openbao-plugin-secrets-aws:v0.3.3@sha256:d930da29a004415c489c4d242a1985d211ca8b507887e35aa097719d95f6e574"
+          # 플러그인 프로세스에 IRSA 자격 변수를 명시 전달 (서버 env 를 상속하지 않을 수 있음)
+          env = [
+            "AWS_ROLE_ARN=arn:aws:iam::111122223333:role/test-live-openbao",
+            "AWS_WEB_IDENTITY_TOKEN_FILE=/var/run/secrets/aws/token",
+            "AWS_REGION=ap-northeast-2",
+            "AWS_STS_REGIONAL_ENDPOINTS=regional",
+            "AWS_EC2_METADATA_DISABLED=true",
+          ]
+        }
+
+        # 감사 로그 — OpenBao 2.x 는 API 로 켤 수 없고 설정 선언만 가능(운영 중 끌 수 없음). 파드 로그(stdout)로
+        audit "file" "to-stdout" {
+          description = "all requests and responses (HMAC) to stdout"
+          options {
+            file_path = "stdout"
+          }
+        }
+
+  serviceAccount:
+    create: true
+    name: openbao

@@ -2,6 +2,7 @@
 # Updates both places that allow-list this PC:
 #   1) GKE control plane authorized network  (terraform.tfvars master_authorized_cidrs "my-pc" -> terraform apply)
 #   2) Cloudflare WAF custom rule "ArgoCD admin PC only" (IPv4 /32 + IPv6 /64, zone rules are managed via API)
+#      covers every admin-PC-only host: argocd + bao (OpenBao, 2026-11-15)
 #
 # Usage:
 #   .\tools\update-myip.ps1            # show current vs configured, change nothing
@@ -14,7 +15,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $tfvars = Join-Path $root "terraform.tfvars"
 $wafRuleName = "ArgoCD admin PC only"
-$argoHost = "argocd.example.com"
+$adminHosts = @("argocd.example.com", "bao.example.com")
 
 # --- current public addresses ---
 $v4 = (Invoke-RestMethod -TimeoutSec 10 https://api.ipify.org).Trim()
@@ -37,7 +38,10 @@ $cfgV4 = $m.Groups[1].Value
 Write-Host "tfvars  : $cfgV4 (my-pc)"
 
 $tok = (Get-Content (Join-Path $root "secret\cloudflare_api"))[8].Trim()
-$zone = ([regex]::Match($tf, 'cloudflare_zone_id\s*=\s*"([^"]+)"')).Groups[1].Value
+# zone id lives in platform/terraform.tfvars since the 2026-11-14 bootstrap/platform split
+$ptf = Get-Content (Join-Path $root "platform/terraform.tfvars") -Raw
+$zone = ([regex]::Match($ptf, 'cloudflare_zone_id\s*=\s*"([^"]+)"')).Groups[1].Value
+if (-not $zone) { throw "cloudflare_zone_id not found in platform/terraform.tfvars" }
 $h = @{ Authorization = "Bearer $tok"; "Content-Type" = "application/json" }
 $rs = (Invoke-RestMethod -Headers $h "https://api.cloudflare.com/client/v4/zones/$zone/rulesets/phases/http_request_firewall_custom/entrypoint").result
 $rule = $rs.rules | Where-Object { $_.description -eq $wafRuleName }
@@ -46,7 +50,8 @@ Write-Host "WAF     : $($rule.expression)"
 
 $needTf = ($cfgV4 -ne "$v4/32")
 $ipList = (@("$v4") + @($v6net) | Where-Object { $_ }) -join " "
-$newExpr = "(http.host eq `"$argoHost`" and not ip.src in {$ipList})"
+$hostList = ($adminHosts | ForEach-Object { "`"$_`"" }) -join " "
+$newExpr = "(http.host in {$hostList} and not ip.src in {$ipList})"
 $needWaf = ($rule.expression -ne $newExpr)
 if (-not $needTf -and -not $needWaf) { Write-Host "OK: nothing to change"; return }
 Write-Host "changes : terraform=$needTf waf=$needWaf"

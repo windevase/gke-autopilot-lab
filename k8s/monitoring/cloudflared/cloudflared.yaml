@@ -1,5 +1,5 @@
 # Cloudflare Tunnel: grafana.example.com -> kps-grafana, argocd.example.com -> argocd-server,
-#                    atlantis.example.com/events -> atlantis (2026-11-13 추가)
+#                    atlantis.example.com/events -> atlantis (2026-11-13 추가), bao.example.com -> openbao (2026-11-15)
 # (공인 IP/LB 없이 아웃바운드 연결만 사용)
 # - 터널: lab-grafana (로컬 관리형: 라우팅 규칙은 아래 ConfigMap으로 코드 관리)
 # - 자격증명: Secret cloudflared-credentials (cloudflared tunnel create 가 만든 <터널ID>.json)
@@ -27,6 +27,10 @@ data:
       - hostname: atlantis.example.com
         path: ^/events$
         service: http://atlantis.atlantis.svc.cluster.local:80
+      # OpenBao: 키 대체용 임시 자격 발급. 존 WAF 규칙 'ArgoCD admin PC only' 가 관리자 PC 공인 IP 만 통과 (tools/update-myip.ps1)
+      # + OpenBao 자체 로그인(OIDC). 클러스터 안 구간은 NetworkPolicy 로 cloudflared → 8200 만
+      - hostname: bao.example.com
+        service: http://openbao-active.openbao.svc.cluster.local:8200
       - service: http_status:404
 ---
 apiVersion: apps/v1

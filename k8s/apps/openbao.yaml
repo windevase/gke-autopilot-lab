@@ -1,0 +1,34 @@
+# OpenBao: 키 대체용 임시 자격 발급 (lab 시범 — 로컬 PC 의 AWS 영구 키를 STS 임시 자격으로)
+# 공식 차트 + Git values 멀티 소스. 봉인 해제 키는 수동 Secret openbao-unseal (k8s/openbao/values.yaml 머리말)
+# 외부 진입: monitoring/cloudflared 공용 터널(lab-grafana)의 bao.example.com + 존 WAF(관리자 PC IP 만)
+# 필요할 때만 가동 — tools/atlantis.ps1 on/off 가 Atlantis 와 함께 켜고 끔, 20:00 오프아워 Job 이 끔 (replicas 는 Argo 가 무시)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openbao
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://openbao.github.io/openbao-helm
+      chart: openbao
+      targetRevision: 0.30.7 # app v2.7.2
+      helm:
+        releaseName: openbao
+        valueFiles:
+          - $values/k8s/openbao/values.yaml
+    - repoURL: git@github.com:windevase/gcp.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openbao
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers: [/spec/replicas]
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # Git = 원본. 클러스터에서 직접 바꾼 내용은 되돌려짐
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true

@@ -7,8 +7,9 @@ Cloudflare Tunnel로 외부에 공개한 포트폴리오용 실습 환경입니�
 인프라는 Terraform, 클러스터 안 워크로드는 **Argo CD(GitOps)** 로 관리합니다. Git에 push하면 Argo CD가 클러스터를 Git과 일치시킵니다.
 클라우드 리소스 변경(이 저장소의 `platform/` 계층, 별도 저장소의 AWS 프로젝트)은 클러스터 안의 **Atlantis**가 PR 단위로 plan·apply합니다.
 사람은 채팅으로만 승인하고, AI 에이전트가 PR 작성·보고·승인 기록을 맡으며, 감시·사후 감사가 그 과정을 강제합니다 ([Terraform CI/CD](#terraform-cicd-atlantis--채팅-승인)).
+역할을 붙일 수 없는 서버(온프레미스 등)와 담당자 PC 는 **OpenBao**에서 AWS 임시 자격을 받아 **액세스 키 없이** 동작합니다 ([임시 자격 발급](#임시-자격-발급-openbao)).
 
-**목표:** 운영 품질(보안·관측성·자동화)은 지키면서 비용은 최소로 유지합니다. 예상 비용은 **월 약 $5.2**입니다 (Prometheus 이중화 + Thanos, Argo CD, Atlantis 포함).
+**목표:** 운영 품질(보안·관측성·자동화)은 지키면서 비용은 최소로 유지합니다. 예상 비용은 **월 약 $5.3**입니다 (Prometheus 이중화 + Thanos, Argo CD, Atlantis, OpenBao 포함).
 
 > **저장소 구성:** 운영은 private 저장소에서 하고, 공개 저장소 [gke-autopilot-lab](https://github.com/windevase/gke-autopilot-lab)에는 검사를 통과한 **스냅샷**만 올립니다.
 > 공개본에서는 계정 식별 정보(프로젝트 ID·도메인·계정 ID 등)를 `my-gcp-project`, `example.com` 같은 예시 값으로 바꾸고,
@@ -19,7 +20,7 @@ Cloudflare Tunnel로 외부에 공개한 포트폴리오용 실습 환경입니�
 ```mermaid
 flowchart LR
   user([사용자]) -->|grafana.* HTTPS| cf[Cloudflare<br/>WAF · 국가 제한 · rate limit]
-  admin([관리자 PC]) -->|argocd.* HTTPS<br/>IP 허용 목록| cf
+  admin([관리자 PC]) -->|argocd.* · bao.* HTTPS<br/>IP 허용 목록| cf
   cf -->|Tunnel<br/>아웃바운드 연결만| cfd
 
   subgraph gke[GKE Autopilot · Spot Pod]
@@ -40,11 +41,16 @@ flowchart LR
     subgraph atl[namespace atlantis · 필요할 때만 · 20:00 자동 종료]
       atlantis[Atlantis<br/>서버 측 정책·감시<br/>plan 첫 단계 사전 검사]
     end
+    subgraph ob[namespace openbao · 필요할 때만 · 20:00 자동 종료]
+      openbao[OpenBao<br/>AppRole·OIDC 로그인<br/>AWS 플러그인 · 감사 로그]
+    end
     cfd --> grafana
     cfd --> argocd
     cfd -->|/events 웹훅만| atlantis
+    cfd --> openbao
     argocd -->|App of Apps<br/>자동 동기화| mon
     argocd --> atl
+    argocd --> ob
     prom0 & prom1 -.->|지표| atlantis
   end
 
@@ -61,6 +67,8 @@ flowchart LR
   prs -->|웹훅 · GitHub IP만| cf
   atlantis -->|plan: 읽기 역할 / apply: 쓰기 역할<br/>GKE OIDC · 키 없음| aws[(AWS<br/>terraform 프로젝트)]
   atlantis -->|WIF · IAM 조건| gcpp[(GCP · Cloudflare<br/>platform 계층)]
+  onprem([역할 없는 서버<br/>AppRole · IP 고정]) -.->|bao.* · STS 요청| cf
+  openbao -->|IRSA · 키 없음<br/>STS 15분~1시간 발급| aws
   grafana -->|읽기 전용 PAT| ghapi[(GitHub API<br/>PR · Actions · 결제 사용량)]
   repo -.->|검사 통과 스냅샷<br/>식별 정보 치환| pub[(공개 저장소<br/>포트폴리오)]
 ```
@@ -77,6 +85,7 @@ flowchart LR
 | 백업 | Grafana DB를 매주 GCS로 (생성 권한만, 60일 보관) |
 | IaC | Terraform (GCP + Cloudflare), Helm values, Kubernetes 매니페스트. 계층 분리: bootstrap(클러스터·권한, 로컬) / `platform/`(Atlantis) |
 | Terraform CI/CD | **Atlantis**(클러스터 안, 필요할 때만): PR 단위 plan → 채팅 승인 → apply → 자동 merge. 이 저장소 `platform/` + 별도 AWS 저장소 |
+| 임시 자격 발급 | **OpenBao**(클러스터 안, 필요할 때만): 역할 없는 서버는 AppRole(IP 고정), 담당자는 OIDC 로그인 → AWS STS 15분~1시간. OpenBao 자신도 키 없음(IRSA) |
 | 변경 통제 | 무료 GitHub(브랜치 보호 없음)를 규칙으로 보완: 채팅 승인 기록 · 서버 측 감시 · main 사후 감사 · 저장소 간 교차 감사 · AI 거부 목록 |
 | CI · 버전 관리 | GitHub Actions: Terraform fmt/validate, kubeconform(Helm 렌더링 포함), gitleaks, 대시보드·스크립트 검사. Renovate·Dependabot이 업데이트 PR 생성 |
 
@@ -206,6 +215,30 @@ lab-*.configmap.yaml ──git push──▶ Argo CD 동기화 ──▶ Grafana
 | 외부 경로 | Cloudflare Tunnel로 `/events` 웹훅만, WAF로 GitHub hooks IP·POST만 허용. UI는 외부 비공개 |
 | 관측 | Atlantis 지표(ServiceMonitor) + GitHub PR·Actions 이력 → Terraform CI/CD 대시보드 |
 
+## 임시 자격 발급 (OpenBao)
+
+액세스 키를 나눠 주지 않고, **신원을 확인한 뒤 수명이 짧은 자격을 그때그때 발급**합니다. 클라우드 서버·파드는 원래 역할(IRSA·Workload Identity)을 쓰고,
+OpenBao 는 **역할을 붙일 수 없는 곳**(온프레미스 서버, 담당자 PC)을 맡습니다. 정책 원본은 AWS 저장소 `docs/policy/access.md`.
+
+```
+역할 없는 서버: role_id + secret_id(이 서버 IP 에서만) ─▶ AppRole 로그인 ─┐
+담당자 PC:      브라우저 OIDC 로그인(Google, 회사는 Entra ID) ─────────────┤
+                                                                         ▼
+                OpenBao ─(IRSA, 키 없음)─▶ AWS 중개 역할 ─▶ 대상 역할 STS (15분~1시간)
+                                                                         ▼
+                aws CLI·SDK ◀─ credential_process(만료 5분 전까지 캐시 재사용)
+```
+
+| 항목 | 구성 |
+|---|---|
+| 배포 | Argo 앱 `openbao`(공식 차트), 1대 Raft·Spot. **필요할 때만 가동** — `tools/atlantis.ps1 on/off` 가 Atlantis 와 함께 켜고 끄고, 20:00 오프아워 Job 이 끔 |
+| 봉인 해제 | static seal(수동 Secret) — 재시작해도 자동 unseal. 클라우드 KMS 는 쓰지 않음(회사 환경도 동일) |
+| 외부 경로 | 같은 Cloudflare Tunnel 의 `bao.*` + WAF(관리자 PC IP 만) + NetworkPolicy(cloudflared → 8200 만) |
+| 플러그인 | OpenBao 2.x 는 AWS 엔진이 내장이 아님 → 공식 플러그인을 설정에 **digest 고정**으로 선언(기동 때 다운로드, 실패 시 기동 실패) |
+| 감사 | 설정에 선언(API 로 끌 수 없음), 모든 요청을 실제 호출자 IP 와 함께 파드 로그로 |
+| 권한 | 서버용 AppRole 은 필요한 권한만(시범: S3 읽기), 관리자 STS 는 사람 OIDC 로그인에만. 루트 토큰은 초기 설정 후 폐기 |
+| 검증 | 키 없이 STS 발급·호출, 권한 밖 동작 거부, 래핑 토큰 재사용 거부, 다른 주소에서 AppRole 로그인 거부, `aws` 10회 → 발급 1회(캐시) |
+
 ## Prometheus 고가용성 (HA pair + Thanos)
 
 Spot Pod는 언제든 회수될 수 있어, Prometheus가 1대면 회수·재시작 동안(보통 2~5분) 지표가 비었습니다.
@@ -248,8 +281,9 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
 | Argo CD 4개 컴포넌트 (평일 10시간) | 약 $1.0 |
 | CronJob (budget-guard 매시간, 백업 주 1회, 자가 점검 월 1회, 오프아워) | 약 $0.05 |
 | Atlantis (켜 둔 시간만, 비 Spot 250m/1Gi ≈ $0.016/h) + PVC 2Gi | 약 $0.1~0.3 |
+| OpenBao (켜 둔 시간만, Spot 50m/256Mi) + PVC 1Gi | 약 $0.05~0.1 |
 | PV, 로깅, BigQuery, Pub/Sub, GCS 백업, Cloudflare | 약 $0 (무료 등급) |
-| **합계** | **약 $5.2** |
+| **합계** | **약 $5.3** |
 
 ## 보안
 
@@ -271,6 +305,7 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
 - **공개 저장소:** 운영 저장소를 그대로 공개하지 않고, 식별 정보 치환 + 잔존·비밀값 검사를 통과한 스냅샷만 별도 저장소로 (`tools/publish-public.sh`)
 - **Atlantis:** 외부에는 웹훅 경로만(GitHub IP·POST), 저장소가 workflow·정책을 덮어쓸 수 없는 서버 측 설정, plan은 읽기 전용 AWS 역할, 감시 스크립트는 클러스터 ConfigMap(PR이 고칠 수 없음)
 - **변경 통제:** 원본·사본 스크립트 동일성 CI, main 사후 감사·교차 감사, AI 에이전트 거부 목록(권한 설정으로 강제)
+- **OpenBao:** 외부에는 관리자 PC IP 만(WAF), 서버 로그인은 IP 고정 AppRole, 관리자 권한은 사람 OIDC 로그인에만, 감사 로그는 설정 선언(끌 수 없음), 루트 토큰 폐기, 플러그인 digest 고정, 평소 꺼 둠(공격 표면 없음)
 
 ## 백업
 
@@ -313,7 +348,7 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
 ├─ .github/scripts/policy-audit.sh   # 사후 감사 스크립트 (보호 경로 변경의 승인 기록 확인)
 ├─ renovate.json                     # 차트·이미지 버전 업데이트 PR (Actions는 Dependabot)
 ├─ tools/update-myip.ps1             # 공인 IP 변경 시 컨트롤 플레인 허용 IP + WAF 규칙 갱신
-├─ tools/atlantis.ps1                # Atlantis on/off/status/replan
+├─ tools/atlantis.ps1                # Atlantis(+ OpenBao) on/off/status/replan
 ├─ tools/bot-pr.sh, chat-approve.sh  # 봇 PR, 채팅 승인 기록·merge (원본: AWS 저장소, 동일 사본)
 ├─ tools/pr-report.py                # PR plan 결과를 채팅 보고용으로 요약
 ├─ tools/waf-atlantis.py             # Cloudflare WAF: Atlantis 호스트는 GitHub 웹훅 IP·경로만 (멱등)
@@ -329,12 +364,13 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
    ├─ argocd/              # Argo CD values + install.ps1 (Argo CD 자신은 Helm으로 부트스트랩)
    ├─ apps/                # App of Apps: root + 컴포넌트별 Application
    ├─ atlantis/            # Atlantis values(서버 측 정책·workflow), 감시 스크립트·AWS 프로필 ConfigMap, NetworkPolicy
+   ├─ openbao/             # OpenBao values(static seal·AWS 플러그인 digest·감사 선언·IRSA·NetworkPolicy)
    └─ monitoring/
       ├─ kps/              # kube-prometheus-stack values (설계 근거는 주석에), 부트스트랩용 deploy.ps1
       ├─ cloudflared/      # 터널 커넥터 (라우팅 ConfigMap + Deployment + PodMonitor)
       ├─ budget-guard/     # 예산 초과 자동 차단 + 월간 자가 점검
       ├─ backup/           # Grafana DB 주간 백업
-      ├─ offhours/         # 평일 10~20시만 가동 (Grafana·cloudflared·Argo CD) + Atlantis 20:00 종료
+      ├─ offhours/         # 평일 10~20시만 가동 (Grafana·cloudflared·Argo CD) + Atlantis·OpenBao 20:00 종료
       ├─ platform/         # StorageClass, NetworkPolicy
       └─ dashboards/       # 대시보드 생성기(gen_*.py, 공통 _dashlib.py) → JSON → ConfigMap
 ```

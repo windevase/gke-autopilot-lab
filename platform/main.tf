@@ -1,7 +1,12 @@
 # platform 계층 모듈 — 2026-11-14 루트(bootstrap)에서 state 이동(terraform state mv), 리소스 변경 없음
 
-# Cloudflare Tunnel(lab-grafana) + DNS — grafana·argocd·atlantis 호스트 (라우팅은 k8s ConfigMap cloudflared-config)
-# Argo CD: 존 WAF 사용자 규칙으로 관리자 PC 공인 IP 만 / Atlantis: GitHub 웹훅 IP·POST /events 만 (tools/waf-atlantis.py)
+# OpenBao(키 대체용 임시 자격 발급) 외부 호스트 — grafana 호스트와 같은 도메인의 bao.* (새 변수 없이 계산 → Atlantis Secret tfvars 변경 불필요)
+locals {
+  openbao_hostname = replace(var.grafana_hostname, "/^grafana\\./", "bao.")
+}
+
+# Cloudflare Tunnel(lab-grafana) + DNS — grafana·argocd·atlantis·bao 호스트 (라우팅은 k8s ConfigMap cloudflared-config)
+# Argo CD·OpenBao: 존 WAF 사용자 규칙으로 관리자 PC 공인 IP 만 / Atlantis: GitHub 웹훅 IP·POST /events 만 (tools/waf-atlantis.py)
 module "cloudflare_tunnel" {
   source = "../modules/cloudflare-tunnel"
 
@@ -9,7 +14,7 @@ module "cloudflare_tunnel" {
   zone_id    = var.cloudflare_zone_id
   hostname   = var.grafana_hostname
 
-  additional_hostnames = [var.argocd_hostname, var.atlantis_hostname]
+  additional_hostnames = [var.argocd_hostname, var.atlantis_hostname, local.openbao_hostname]
 }
 
 # 결제 데이터 → BigQuery 내보내기 대상 + Grafana(Workload Identity) 읽기 권한
