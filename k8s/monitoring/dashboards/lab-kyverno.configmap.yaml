@@ -1,0 +1,1064 @@
+apiVersion: v1
+data:
+  lab-kyverno.json: |
+    {
+      "uid": "lab-kyverno",
+      "title": "Lab · Kyverno 정책 결과",
+      "description": "Kyverno 정책 보고서(Audit) — 정책별 통과·위반, 위반 목록, 검사 범위. 데이터: KSM customResourceState(PolicyReport)",
+      "tags": [
+        "lab",
+        "kyverno",
+        "policy"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "5m",
+      "time": {
+        "from": "now-7d",
+        "to": "now"
+      },
+      "templating": {
+        "list": []
+      },
+      "annotations": {
+        "list": []
+      },
+      "panels": [
+        {
+          "type": "text",
+          "title": "",
+          "gridPos": {
+            "h": 4,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**정책 = 코드** (`k8s/kyverno/policies/`): ephemeral-storage 요청 필수(비용) · 이미지 digest/버전 고정 · restricted 보안 설정 · Spot 노드(비용) · lab-api 이미지 cosign 서명.\n**PR 단계**에서 CI(Kyverno CLI)가 매니페스트·차트 렌더링 결과를 검사해 위반이면 merge 차단 → **클러스터**에서는 Audit 모드로 실행 중인 리소스를 다시 검사해 정책 보고서로 남긴다(차단 없음).\nKyverno 는 평일 10~20시만 가동 — 그 밖의 시간에는 마지막 스캔 결과를 보여 준다."
+          },
+          "id": 1
+        },
+        {
+          "type": "row",
+          "title": "요약 (클러스터 정책 보고서)",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 4
+          },
+          "id": 2
+        },
+        {
+          "type": "stat",
+          "title": "위반 (fail)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Audit 모드라 차단되지 않고 기록만 된다. 0 이 정상",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=\"fail\"})) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 3
+        },
+        {
+          "type": "stat",
+          "title": "경고·오류",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "error = 정책 평가 자체가 실패 (예: CEL 식이 필드 없음을 처리 못 함)",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 4,
+            "y": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=~\"warn|error\"})) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 4
+        },
+        {
+          "type": "stat",
+          "title": "통과 (pass)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 7,
+            "y": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=\"pass\"})) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 5
+        },
+        {
+          "type": "stat",
+          "title": "검사한 리소스",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "정책 보고서 1개 = 리소스 1개 (Pod·ReplicaSet·Deployment·StatefulSet·Job·CronJob·Rollout …)",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 10,
+            "y": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(count by (namespace, scope_kind, scope_name) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result)))",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 6
+        },
+        {
+          "type": "stat",
+          "title": "정책 수",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 14,
+            "y": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(count by (policy) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result)))",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 7
+        },
+        {
+          "type": "stat",
+          "title": "마지막 스캔 경과",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "가장 최근 정책 평가 이후 지난 시간. 평일 밤·주말에는 Kyverno 가 꺼져 길어지는 게 정상",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 17,
+            "y": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 86400
+                  },
+                  {
+                    "color": "red",
+                    "value": 259200
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "time() - max(kyverno_policyreport_result)",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 8
+        },
+        {
+          "type": "stat",
+          "title": "Kyverno",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "admission·background·reports 컨트롤러 가동 파드 수 (평일 10~20시 3)",
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 21,
+            "y": 5
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0,
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "꺼짐 (오프아워)",
+                      "color": "gray",
+                      "index": 0
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_deployment_status_replicas_available{namespace=\"kyverno\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "id": 9
+        },
+        {
+          "type": "row",
+          "title": "정책별 결과",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 9
+          },
+          "id": 10
+        },
+        {
+          "type": "table",
+          "title": "정책별 결과 수",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "빈 칸 = 0건",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 10
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "위반"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "range",
+                        "options": {
+                          "from": 1,
+                          "to": 1000000000.0,
+                          "result": {
+                            "color": "red",
+                            "index": 0
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "위반",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (policy) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=\"pass\"}))",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (policy) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=\"fail\"}))",
+              "legendFormat": "",
+              "refId": "B",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (policy) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=\"warn\"}))",
+              "legendFormat": "",
+              "refId": "C",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (policy) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=\"error\"}))",
+              "legendFormat": "",
+              "refId": "D",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (policy) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=\"skip\"}))",
+              "legendFormat": "",
+              "refId": "E",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                },
+                "renameByName": {
+                  "policy": "정책",
+                  "Value #A": "통과",
+                  "Value #B": "위반",
+                  "Value #C": "경고",
+                  "Value #D": "오류",
+                  "Value #E": "건너뜀"
+                }
+              }
+            }
+          ],
+          "id": 11
+        },
+        {
+          "type": "timeseries",
+          "title": "결과 추이",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "결과 건수. 오프아워에는 마지막 보고서가 그대로 유지된다(평평한 구간)",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 10
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": 900000,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (result) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result))",
+              "legendFormat": "{{result}}",
+              "refId": "A",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "id": 12
+        },
+        {
+          "type": "row",
+          "title": "위반·경고 목록",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 18
+          },
+          "id": 13
+        },
+        {
+          "type": "table",
+          "title": "위반·경고 (fail·warn·error)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "비어 있으면 정상. 고친 뒤 다음 background 스캔(1시간 주기)에 사라진다",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 19
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "평가 시각"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "결과"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "fail": {
+                            "text": "위반",
+                            "color": "red",
+                            "index": 0
+                          },
+                          "warn": {
+                            "text": "경고",
+                            "color": "orange",
+                            "index": 1
+                          },
+                          "error": {
+                            "text": "오류",
+                            "color": "purple",
+                            "index": 2
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max by (namespace, scope_kind, scope_name, policy, rule, result, severity, message) (kyverno_policyreport_result{result=~\"fail|warn|error\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                },
+                "renameByName": {
+                  "namespace": "네임스페이스",
+                  "scope_kind": "종류",
+                  "scope_name": "리소스",
+                  "policy": "정책",
+                  "rule": "규칙",
+                  "result": "결과",
+                  "severity": "심각도",
+                  "message": "메시지",
+                  "Value": "평가 시각"
+                }
+              }
+            }
+          ],
+          "id": 14
+        },
+        {
+          "type": "row",
+          "title": "검사 범위",
+          "collapsed": false,
+          "panels": [],
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 27
+          },
+          "id": 15
+        },
+        {
+          "type": "table",
+          "title": "네임스페이스별",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 28
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "리소스",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (namespace) (count by (namespace, scope_kind, scope_name) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result)))",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (namespace) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result))",
+              "legendFormat": "",
+              "refId": "B",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (namespace) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result{result=~\"fail|warn|error\"}))",
+              "legendFormat": "",
+              "refId": "C",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                },
+                "renameByName": {
+                  "namespace": "네임스페이스",
+                  "Value #A": "리소스",
+                  "Value #B": "결과",
+                  "Value #C": "위반·경고"
+                }
+              }
+            }
+          ],
+          "id": 16
+        },
+        {
+          "type": "table",
+          "title": "리소스 종류별",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Pod 를 만드는 상위 객체(ReplicaSet·Deployment 등)도 각각 검사된다",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 28
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "리소스",
+                "desc": true
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (scope_kind) (count by (namespace, scope_kind, scope_name) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result)))",
+              "legendFormat": "",
+              "refId": "A",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count by (scope_kind) (max by (namespace, scope_kind, scope_name, policy, rule, result) (kyverno_policyreport_result))",
+              "legendFormat": "",
+              "refId": "B",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                },
+                "renameByName": {
+                  "scope_kind": "종류",
+                  "Value #A": "리소스",
+                  "Value #B": "결과"
+                }
+              }
+            }
+          ],
+          "id": 17
+        }
+      ]
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    grafana_dashboard: "1"
+  name: grafana-dashboard-lab-kyverno
+  namespace: monitoring

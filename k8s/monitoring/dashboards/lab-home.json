@@ -46,14 +46,14 @@
       "type": "text",
       "title": "",
       "gridPos": {
-        "h": 10,
+        "h": 12,
         "w": 24,
         "x": 0,
         "y": 0
       },
       "options": {
         "mode": "markdown",
-        "content": "### GKE Autopilot 모니터링 랩\n월 **$10 크레딧 안에서** 운영하는 GKE Autopilot(Spot Pod) + kube-prometheus-stack 실습 환경입니다.\nTerraform(GCP·Cloudflare·AWS) · Helm · Cloudflare Tunnel · 예산 초과 자동 차단 · GitHub Actions CI · Argo CD · **Atlantis(채팅 승인 terraform CI/CD)**\n\n| 대시보드 | 내용 |\n|---|---|\n| [💰 실제 청구액](/d/lab-billing) | BigQuery 결제 데이터: 사용액·크레딧·월말 예상, 추정 vs 실제 |\n| [📊 비용 & 용량](/d/lab-cost-capacity) | 파드 requests 기반 비용 추정, rightsizing |\n| [⚙️ 클러스터 성능](/d/lab-cluster-performance) | 노드·워크로드·PV·API 서버·Prometheus |\n| [🛠️ 운영 & 외부 접속](/d/lab-ops) | 가동 타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |\n| [🚀 Argo CD (GitOps)](/d/lab-argocd) | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |\n| [🔐 OpenBao (임시 자격 발급)](/d/lab-openbao) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동) |\n| [🏗️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 |\n| [🐙 GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 |\n"
+        "content": "### GKE Autopilot 모니터링 랩\n월 **$10 크레딧 안에서** 운영하는 GKE Autopilot(Spot Pod) + kube-prometheus-stack 실습 환경입니다.\nTerraform(GCP·Cloudflare·AWS) · Helm · Cloudflare Tunnel · 예산 초과 자동 차단 · GitHub Actions CI · Argo CD · **Atlantis(채팅 승인 terraform CI/CD)**\n\n| 대시보드 | 내용 |\n|---|---|\n| [💰 실제 청구액](/d/lab-billing) | BigQuery 결제 데이터: 사용액·크레딧·월말 예상, 추정 vs 실제 |\n| [📊 비용 & 용량](/d/lab-cost-capacity) | 파드 requests 기반 비용 추정, rightsizing |\n| [⚙️ 클러스터 성능](/d/lab-cluster-performance) | 노드·워크로드·PV·API 서버·Prometheus |\n| [🛠️ 운영 & 외부 접속](/d/lab-ops) | 가동 타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |\n| [🚀 Argo CD (GitOps)](/d/lab-argocd) | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |\n| [🔐 OpenBao (임시 자격 발급)](/d/lab-openbao) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동) |\n| [🎯 SLO (lab-api 에러 버짓)](/d/lab-slo) | 가용성·지연 SLO, 다중 창 소진 속도, canary 배포 파드 템플릿별 비교 |\n| [🛡️ Kyverno 정책 결과](/d/lab-kyverno) | 정책별 통과·위반, 위반 목록, 검사 범위 (CI 차단 + 클러스터 Audit) |\n| [🏗️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 |\n| [🐙 GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 |\n"
       },
       "id": 1
     },
@@ -66,7 +66,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 12
       },
       "id": 2
     },
@@ -82,7 +82,7 @@
         "h": 4,
         "w": 5,
         "x": 0,
-        "y": 11
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -152,7 +152,7 @@
         "h": 4,
         "w": 5,
         "x": 5,
-        "y": 11
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -220,7 +220,7 @@
         "h": 4,
         "w": 5,
         "x": 10,
-        "y": 11
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -290,7 +290,7 @@
         "h": 4,
         "w": 5,
         "x": 15,
-        "y": 11
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -359,7 +359,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 11
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -417,7 +417,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 17
       },
       "id": 8
     },
@@ -433,7 +433,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 16
+        "y": 18
       },
       "fieldConfig": {
         "defaults": {
@@ -494,7 +494,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 16
+        "y": 18
       },
       "fieldConfig": {
         "defaults": {
@@ -555,7 +555,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 16
+        "y": 18
       },
       "fieldConfig": {
         "defaults": {
@@ -620,7 +620,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 16
+        "y": 18
       },
       "fieldConfig": {
         "defaults": {
@@ -685,7 +685,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 16
+        "y": 18
       },
       "fieldConfig": {
         "defaults": {
@@ -754,7 +754,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 16
+        "y": 18
       },
       "fieldConfig": {
         "defaults": {
@@ -820,7 +820,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 22
       },
       "id": 15
     },
@@ -836,7 +836,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 21
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
@@ -905,7 +905,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 21
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
@@ -966,7 +966,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 21
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
@@ -1035,7 +1035,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 21
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
@@ -1103,7 +1103,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 21
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
@@ -1182,7 +1182,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 21
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
@@ -1240,7 +1240,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 27
       },
       "id": 22
     },
@@ -1256,7 +1256,7 @@
         "h": 6,
         "w": 4,
         "x": 0,
-        "y": 26
+        "y": 28
       },
       "fieldConfig": {
         "defaults": {
@@ -1334,7 +1334,7 @@
         "h": 6,
         "w": 4,
         "x": 4,
-        "y": 26
+        "y": 28
       },
       "fieldConfig": {
         "defaults": {
@@ -1403,7 +1403,7 @@
         "h": 6,
         "w": 4,
         "x": 8,
-        "y": 26
+        "y": 28
       },
       "fieldConfig": {
         "defaults": {
@@ -1472,7 +1472,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 28
       },
       "fieldConfig": {
         "defaults": {

@@ -185,7 +185,8 @@ jobs:
                       gen_github_dashboard.py:lab-github.json \
                       gen_github_usage_dashboard.py:lab-github-usage.json \
                       gen_openbao_dashboard.py:lab-openbao.json \
-                      gen_slo_dashboard.py:lab-slo.json; do
+                      gen_slo_dashboard.py:lab-slo.json \
+                      gen_kyverno_dashboard.py:lab-kyverno.json; do
             gen="${pair%%:*}"; json="${pair##*:}"
             python "$gen" "/tmp/$json"
             diff <(python -m json.tool --sort-keys "/tmp/$json") <(python -m json.tool --sort-keys "$json")

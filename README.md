@@ -79,7 +79,7 @@ flowchart LR
 | 클러스터 | GKE Autopilot, us-central1, REGULAR 채널. 모든 워크로드는 **Spot Pod** |
 | 모니터링 | kube-prometheus-stack (Prometheus, Grafana, kube-state-metrics). Alertmanager와 기본 대시보드·규칙은 제거 |
 | 고가용성 | Prometheus 2대(서로 다른 Spot 노드) + Thanos Query로 병합·중복 제거 → Spot 회수 1건으로는 수집 공백 없음 |
-| 대시보드 | 직접 만든 9종 (아래 표) |
+| 대시보드 | 직접 만든 10종 (아래 표) |
 | 외부 공개 | Cloudflare Tunnel (공인 IP·로드밸런서 없음) |
 | 비용 보호 | 예산 초과 시 워크로드를 자동으로 0으로 내리는 kill switch (월 1회 자가 점검) |
 | GitOps | Argo CD App of Apps. 관리자 PC IP + Google 로그인 + RBAC 승인제 |
@@ -107,6 +107,7 @@ flowchart LR
 | **Terraform CI/CD** | Prometheus + GitHub | 사후·교차 감사 마지막 결과, Atlantis 가동 시간·비용(7일), plan·apply 실행 결과(24시간), PR 리드타임, 워크플로 결과, 정책 위반 이슈 |
 | **GitHub 사용량** | GitHub REST (Infinity) | GitHub Free 무료 한도 대비 Actions 분(Linux 환산)·저장 공간(GB-시간)·월말 예상·청구 예정, 캐시, API 요청 한도 |
 | **SLO (lab-api 에러 버짓)** | Prometheus | SLO별 7일 SLI·남은 에러 버짓·현재/기간 소진 속도·경보 상태, 창별(5m·1h·6h·1d) 소진 속도, RED(요청·오류율·p50/95/99), canary 파드 템플릿별 요청·소진 속도 |
+| **Kyverno 정책 결과** | Prometheus (kube-state-metrics) | 정책 보고서(PolicyReport)를 KSM `customResourceState` 로 지표화: 위반·경고·통과 수, 정책별 결과, 위반 목록(리소스·규칙·메시지), 네임스페이스·리소스 종류별 검사 범위, 마지막 스캔 경과. 보고서는 Kyverno 가 꺼진 시간에도 남아 24시간 조회 가능 |
 | **OpenBao (임시 자격 발급)** | Prometheus | 봉인 상태·가동 시간, 인증 방식별 로그인(AppRole·OIDC)·AppRole 로그인 실패(추정), AWS STS 발급·살아 있는 자격, 경로별 요청·처리 시간, 감사 로그 실패, Raft·리소스 (필요할 때만 가동 → 꺼진 시간은 비어 있음) |
 
 ## Dashboard as Code

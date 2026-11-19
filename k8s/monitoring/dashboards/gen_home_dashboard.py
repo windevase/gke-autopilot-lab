@@ -24,11 +24,13 @@ Terraform(GCP·Cloudflare·AWS) · Helm · Cloudflare Tunnel · 예산 초과 �
 | [🛠️ 운영 & 외부 접속](/d/lab-ops) | 가동 타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |
 | [🚀 Argo CD (GitOps)](/d/lab-argocd) | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |
 | [🔐 OpenBao (임시 자격 발급)](/d/lab-openbao) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동) |
+| [🎯 SLO (lab-api 에러 버짓)](/d/lab-slo) | 가용성·지연 SLO, 다중 창 소진 속도, canary 배포 파드 템플릿별 비교 |
+| [🛡️ Kyverno 정책 결과](/d/lab-kyverno) | 정책별 통과·위반, 위반 목록, 검사 범위 (CI 차단 + 클러스터 Audit) |
 | [🏗️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 |
 | [🐙 GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 |
 """
-d.add(text("", INTRO, 0, d.y, w=24, h=10))
-d.y += 10
+d.add(text("", INTRO, 0, d.y, w=24, h=12))
+d.y += 12
 
 # ---------------- 비용 ----------------
 d.row("비용 (이번 달)")

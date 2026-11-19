@@ -404,9 +404,10 @@ kube-state-metrics:
   nodeSelector:
     cloud.google.com/gke-spot: "true"
   # 실측 최대 메모리 ~28Mi → 64Mi (CPU 50m은 Autopilot 파드 최소값이라 유지)
+  # 2026-11-20 customResourceState(PolicyReport) 추가 후 기동 시 OOMKilled(64Mi) — CRS 가 리소스 캐시를 다시 만들며 일시 증가 → 128Mi
   resources:
-    requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
-    limits: { memory: 64Mi }
+    requests: { cpu: 50m, memory: 128Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 128Mi }
   # 커스텀 대시보드가 쓰는 지표만 생성 (KSM 자체 CPU/메모리도 절감)
   metricAllowlist:
     - kube_node_created
@@ -432,3 +433,40 @@ kube-state-metrics:
     - kube_deployment_status_replicas_available
     - kube_statefulset_replicas
     - kube_statefulset_status_replicas_ready
+    # Kyverno 정책 보고서 결과 (아래 customResourceState 가 만드는 지표 — allowlist 에 없으면 걸러짐)
+    - kyverno_policyreport_result
+  # Kyverno PolicyReport(wgpolicyk8s.io) → 지표. 보고서는 Kyverno 가 꺼진 오프아워에도 남으므로 24h KSM 이 계속 노출
+  # 결과 1건 = 시계열 1개 (값 = 마지막 평가 시각 epoch 초). 개수는 count, 최근 스캔은 max 로 집계 — 대시보드 lab-kyverno
+  # 차트는 CRD 조회 권한만 자동 생성 → policyreports 읽기는 rbac.extraRules 로 직접 부여
+  customResourceState:
+    enabled: true
+    config:
+      kind: CustomResourceStateMetrics
+      spec:
+        resources:
+          - groupVersionKind: { group: wgpolicyk8s.io, version: v1alpha2, kind: PolicyReport }
+            metricNamePrefix: kyverno_policyreport
+            labelsFromPath:
+              namespace: [metadata, namespace]
+              scope_kind: [scope, kind]
+              scope_name: [scope, name]
+            metrics:
+              - name: result
+                help: "Kyverno policy report result (value = last evaluation epoch seconds)"
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [results]
+                    valueFrom: [timestamp, seconds]
+                    labelsFromPath:
+                      policy: [policy]
+                      rule: [rule]
+                      result: [result]
+                      severity: [severity]
+                      category: [category]
+                      message: [message]
+  rbac:
+    extraRules:
+      - apiGroups: [wgpolicyk8s.io]
+        resources: [policyreports]
+        verbs: [list, watch]

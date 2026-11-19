@@ -12,7 +12,7 @@ data:
     \       \"type\": \"constant\",\n        \"hide\": 2,\n        \"query\": \"0.0014767\"\n
     \     }\n    ]\n  },\n  \"annotations\": {\n    \"list\": []\n  },\n  \"panels\":
     [\n    {\n      \"type\": \"text\",\n      \"title\": \"\",\n      \"gridPos\":
-    {\n        \"h\": 10,\n        \"w\": 24,\n        \"x\": 0,\n        \"y\": 0\n
+    {\n        \"h\": 12,\n        \"w\": 24,\n        \"x\": 0,\n        \"y\": 0\n
     \     },\n      \"options\": {\n        \"mode\": \"markdown\",\n        \"content\":
     \"### GKE Autopilot 모니터링 랩\\n월 **$10 크레딧 안에서** 운영하는 GKE Autopilot(Spot Pod) +
     kube-prometheus-stack 실습 환경입니다.\\nTerraform(GCP·Cloudflare·AWS) · Helm · Cloudflare
@@ -24,16 +24,19 @@ data:
     타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |\\n| [\U0001F680 Argo CD (GitOps)](/d/lab-argocd)
     | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |\\n| [\U0001F510 OpenBao (임시
     자격 발급)](/d/lab-openbao) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동)
-    |\\n| [\U0001F3D7️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동
-    시간) + PR·Actions·사후/교차 감사·정책 위반 이력 |\\n| [\U0001F419 GitHub 사용량](/d/lab-github-usage)
-    | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 |\\n\"\n      },\n      \"id\":
-    1\n    },\n    {\n      \"type\": \"row\",\n      \"title\": \"비용 (이번 달)\",\n
-    \     \"collapsed\": false,\n      \"panels\": [],\n      \"gridPos\": {\n        \"h\":
-    1,\n        \"w\": 24,\n        \"x\": 0,\n        \"y\": 10\n      },\n      \"id\":
-    2\n    },\n    {\n      \"type\": \"stat\",\n      \"title\": \"순 청구액\",\n      \"datasource\":
-    {\n        \"type\": \"grafana-bigquery-datasource\",\n        \"uid\": \"bigquery-billing\"\n
-    \     },\n      \"description\": \"크레딧 차감 후 실제 결제될 금액 (결제 데이터는 1~2일 지연)\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 5,\n        \"x\": 0,\n        \"y\": 11\n
+    |\\n| [\U0001F3AF SLO (lab-api 에러 버짓)](/d/lab-slo) | 가용성·지연 SLO, 다중 창 소진 속도, canary
+    배포 파드 템플릿별 비교 |\\n| [\U0001F6E1️ Kyverno 정책 결과](/d/lab-kyverno) | 정책별 통과·위반, 위반
+    목록, 검사 범위 (CI 차단 + 클러스터 Audit) |\\n| [\U0001F3D7️ Terraform CI/CD](/d/lab-github)
+    | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 |\\n| [\U0001F419
+    GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API
+    한도 |\\n\"\n      },\n      \"id\": 1\n    },\n    {\n      \"type\": \"row\",\n
+    \     \"title\": \"비용 (이번 달)\",\n      \"collapsed\": false,\n      \"panels\":
+    [],\n      \"gridPos\": {\n        \"h\": 1,\n        \"w\": 24,\n        \"x\":
+    0,\n        \"y\": 12\n      },\n      \"id\": 2\n    },\n    {\n      \"type\":
+    \"stat\",\n      \"title\": \"순 청구액\",\n      \"datasource\": {\n        \"type\":
+    \"grafana-bigquery-datasource\",\n        \"uid\": \"bigquery-billing\"\n      },\n
+    \     \"description\": \"크레딧 차감 후 실제 결제될 금액 (결제 데이터는 1~2일 지연)\",\n      \"gridPos\":
+    {\n        \"h\": 4,\n        \"w\": 5,\n        \"x\": 0,\n        \"y\": 13\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"currencyKRW\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"green\",\n
@@ -57,7 +60,7 @@ data:
     \     \"title\": \"예산 대비 (₩$budget_krw)\",\n      \"datasource\": {\n        \"type\":
     \"grafana-bigquery-datasource\",\n        \"uid\": \"bigquery-billing\"\n      },\n
     \     \"description\": \"100%면 budget-guard가 워크로드를 자동으로 0으로 내림\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 5,\n        \"x\": 5,\n        \"y\": 11\n
+    {\n        \"h\": 4,\n        \"w\": 5,\n        \"x\": 5,\n        \"y\": 13\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"percentunit\",\n          \"min\": 0,\n          \"max\": 1,\n          \"thresholds\":
     {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n
@@ -80,7 +83,7 @@ data:
     \   {\n      \"type\": \"stat\",\n      \"title\": \"월말 예상 (할인 전, USD)\",\n      \"datasource\":
     {\n        \"type\": \"grafana-bigquery-datasource\",\n        \"uid\": \"bigquery-billing\"\n
     \     },\n      \"description\": \"크레딧 차감 전 전체 사용액의 월 환산. $10 크레딧과 비교\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 5,\n        \"x\": 10,\n        \"y\": 11\n
+    {\n        \"h\": 4,\n        \"w\": 5,\n        \"x\": 10,\n        \"y\": 13\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"currencyUSD\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"green\",\n
@@ -105,7 +108,7 @@ data:
     \     \"title\": \"추정 월 비용 (USD)\",\n      \"datasource\": {\n        \"type\":
     \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"description\":
     \"파드 requests × Spot 단가, 최근 7일 평균 (비용 & 용량 대시보드와 동일)\",\n      \"gridPos\": {\n
-    \       \"h\": 4,\n        \"w\": 5,\n        \"x\": 15,\n        \"y\": 11\n
+    \       \"h\": 4,\n        \"w\": 5,\n        \"x\": 15,\n        \"y\": 13\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"currencyUSD\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"green\",\n
@@ -131,7 +134,7 @@ data:
     \     \"title\": \"수집 시계열\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n
     \       \"uid\": \"prometheus\"\n      },\n      \"description\": \"keep 리스트로
     대시보드가 쓰는 지표만 수집 (약 5.2만 → 4~5천)\",\n      \"gridPos\": {\n        \"h\": 4,\n
-    \       \"w\": 4,\n        \"x\": 20,\n        \"y\": 11\n      },\n      \"fieldConfig\":
+    \       \"w\": 4,\n        \"x\": 20,\n        \"y\": 13\n      },\n      \"fieldConfig\":
     {\n        \"defaults\": {\n          \"unit\": \"short\",\n          \"thresholds\":
     {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n
     \               \"color\": \"green\",\n                \"value\": null\n              }\n
@@ -148,11 +151,11 @@ data:
     false\n        }\n      ],\n      \"id\": 7\n    },\n    {\n      \"type\": \"row\",\n
     \     \"title\": \"클러스터\",\n      \"collapsed\": false,\n      \"panels\": [],\n
     \     \"gridPos\": {\n        \"h\": 1,\n        \"w\": 24,\n        \"x\": 0,\n
-    \       \"y\": 15\n      },\n      \"id\": 8\n    },\n    {\n      \"type\": \"stat\",\n
+    \       \"y\": 17\n      },\n      \"id\": 8\n    },\n    {\n      \"type\": \"stat\",\n
     \     \"title\": \"노드\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n
     \       \"uid\": \"prometheus\"\n      },\n      \"description\": \"Autopilot이
     관리 (노드 자체는 과금 안 됨)\",\n      \"gridPos\": {\n        \"h\": 4,\n        \"w\":
-    4,\n        \"x\": 0,\n        \"y\": 16\n      },\n      \"fieldConfig\": {\n
+    4,\n        \"x\": 0,\n        \"y\": 18\n      },\n      \"fieldConfig\": {\n
     \       \"defaults\": {\n          \"unit\": \"short\",\n          \"thresholds\":
     {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n
     \               \"color\": \"green\",\n                \"value\": null\n              }\n
@@ -170,7 +173,7 @@ data:
     \     \"title\": \"모니터링 파드 Running\",\n      \"datasource\": {\n        \"type\":
     \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"description\":
     \"monitoring 네임스페이스 (CronJob 파드가 실행 중인 몇 초 동안은 +1)\",\n      \"gridPos\": {\n
-    \       \"h\": 4,\n        \"w\": 4,\n        \"x\": 4,\n        \"y\": 16\n      },\n
+    \       \"h\": 4,\n        \"w\": 4,\n        \"x\": 4,\n        \"y\": 18\n      },\n
     \     \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\",\n
     \         \"thresholds\": {\n            \"mode\": \"absolute\",\n            \"steps\":
     [\n              {\n                \"color\": \"green\",\n                \"value\":
@@ -188,7 +191,7 @@ data:
     \   {\n      \"type\": \"stat\",\n      \"title\": \"재시작 (24h)\",\n      \"datasource\":
     {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n
     \     \"description\": \"\",\n      \"gridPos\": {\n        \"h\": 4,\n        \"w\":
-    4,\n        \"x\": 8,\n        \"y\": 16\n      },\n      \"fieldConfig\": {\n
+    4,\n        \"x\": 8,\n        \"y\": 18\n      },\n      \"fieldConfig\": {\n
     \       \"defaults\": {\n          \"unit\": \"short\",\n          \"thresholds\":
     {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n
     \               \"color\": \"green\",\n                \"value\": null\n              },\n
@@ -208,7 +211,7 @@ data:
     (24h)\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\":
     \"prometheus\"\n      },\n      \"description\": \"24시간 안에 OOMKilled로 종료된 컨테이너
     수 (KSM 종료 사유 기준)\",\n      \"gridPos\": {\n        \"h\": 4,\n        \"w\": 4,\n
-    \       \"x\": 12,\n        \"y\": 16\n      },\n      \"fieldConfig\": {\n        \"defaults\":
+    \       \"x\": 12,\n        \"y\": 18\n      },\n      \"fieldConfig\": {\n        \"defaults\":
     {\n          \"unit\": \"short\",\n          \"thresholds\": {\n            \"mode\":
     \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
     \"green\",\n                \"value\": null\n              },\n              {\n
@@ -227,7 +230,7 @@ data:
     true\n        }\n      ],\n      \"id\": 12\n    },\n    {\n      \"type\": \"stat\",\n
     \     \"title\": \"수집 대상 정상\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n
     \       \"uid\": \"prometheus\"\n      },\n      \"description\": \"\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 16,\n        \"y\": 16\n
+    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 16,\n        \"y\": 18\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"percentunit\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"red\",\n
@@ -247,7 +250,7 @@ data:
     \     ],\n      \"id\": 13\n    },\n    {\n      \"type\": \"stat\",\n      \"title\":
     \"API 5xx 비율\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n
     \       \"uid\": \"prometheus\"\n      },\n      \"description\": \"\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 20,\n        \"y\": 16\n
+    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 20,\n        \"y\": 18\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"percentunit\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"green\",\n
@@ -267,12 +270,12 @@ data:
     \         \"range\": true,\n          \"instant\": false\n        }\n      ],\n
     \     \"id\": 14\n    },\n    {\n      \"type\": \"row\",\n      \"title\": \"운영
     · 외부 접속\",\n      \"collapsed\": false,\n      \"panels\": [],\n      \"gridPos\":
-    {\n        \"h\": 1,\n        \"w\": 24,\n        \"x\": 0,\n        \"y\": 20\n
+    {\n        \"h\": 1,\n        \"w\": 24,\n        \"x\": 0,\n        \"y\": 22\n
     \     },\n      \"id\": 15\n    },\n    {\n      \"type\": \"stat\",\n      \"title\":
     \"터널 연결\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\":
     \"prometheus\"\n      },\n      \"description\": \"정상 4. 평일 20시 이후·주말엔 cloudflared가
     꺼져 데이터 없음\",\n      \"gridPos\": {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\":
-    0,\n        \"y\": 21\n      },\n      \"fieldConfig\": {\n        \"defaults\":
+    0,\n        \"y\": 23\n      },\n      \"fieldConfig\": {\n        \"defaults\":
     {\n          \"unit\": \"short\",\n          \"thresholds\": {\n            \"mode\":
     \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
     \"red\",\n                \"value\": null\n              },\n              {\n
@@ -291,7 +294,7 @@ data:
     false\n        }\n      ],\n      \"id\": 16\n    },\n    {\n      \"type\": \"stat\",\n
     \     \"title\": \"요청 (분당)\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n
     \       \"uid\": \"prometheus\"\n      },\n      \"description\": \"\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 4,\n        \"y\": 21\n
+    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 4,\n        \"y\": 23\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"short\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"green\",\n
@@ -310,7 +313,7 @@ data:
     {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n
     \     \"description\": \"오리진(Grafana) 5xx 응답 비율. 브라우저 요청 취소(context canceled)와
     Grafana 미구현 API의 501은 제외\",\n      \"gridPos\": {\n        \"h\": 4,\n        \"w\":
-    4,\n        \"x\": 8,\n        \"y\": 21\n      },\n      \"fieldConfig\": {\n
+    4,\n        \"x\": 8,\n        \"y\": 23\n      },\n      \"fieldConfig\": {\n
     \       \"defaults\": {\n          \"unit\": \"percentunit\",\n          \"thresholds\":
     {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n
     \               \"color\": \"green\",\n                \"value\": null\n              },\n
@@ -331,7 +334,7 @@ data:
     \     \"title\": \"budget-guard 마지막 성공\",\n      \"datasource\": {\n        \"type\":
     \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"description\":
     \"예산 초과 감시 (매시간). 1.5시간 넘게 성공이 없으면 주황\",\n      \"gridPos\": {\n        \"h\":
-    4,\n        \"w\": 4,\n        \"x\": 12,\n        \"y\": 21\n      },\n      \"fieldConfig\":
+    4,\n        \"w\": 4,\n        \"x\": 12,\n        \"y\": 23\n      },\n      \"fieldConfig\":
     {\n        \"defaults\": {\n          \"unit\": \"s\",\n          \"thresholds\":
     {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n
     \               \"color\": \"green\",\n                \"value\": null\n              },\n
@@ -351,7 +354,7 @@ data:
     \   {\n      \"type\": \"stat\",\n      \"title\": \"자동 기동 CronJob\",\n      \"datasource\":
     {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n
     \     \"description\": \"'차단됨'이면 예산 100% 초과로 budget-guard가 자동 차단한 상태\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 16,\n        \"y\": 21\n
+    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 16,\n        \"y\": 23\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"short\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"green\",\n
@@ -374,7 +377,7 @@ data:
     \   {\n      \"type\": \"stat\",\n      \"title\": \"기간 내 노드 교체\",\n      \"datasource\":
     {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n
     \     \"description\": \"대시보드 기간 동안 사라진 노드 수 (Spot 회수·Autopilot 재배치)\",\n      \"gridPos\":
-    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 20,\n        \"y\": 21\n
+    {\n        \"h\": 4,\n        \"w\": 4,\n        \"x\": 20,\n        \"y\": 23\n
     \     },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\":
     \"short\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
     \           \"steps\": [\n              {\n                \"color\": \"green\",\n
@@ -392,12 +395,12 @@ data:
     true\n        }\n      ],\n      \"id\": 21\n    },\n    {\n      \"type\": \"row\",\n
     \     \"title\": \"GitOps · 안정성\",\n      \"collapsed\": false,\n      \"panels\":
     [],\n      \"gridPos\": {\n        \"h\": 1,\n        \"w\": 24,\n        \"x\":
-    0,\n        \"y\": 25\n      },\n      \"id\": 22\n    },\n    {\n      \"type\":
+    0,\n        \"y\": 27\n      },\n      \"id\": 22\n    },\n    {\n      \"type\":
     \"stat\",\n      \"title\": \"GitOps (Argo CD)\",\n      \"datasource\": {\n        \"type\":
     \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"description\":
     \"Git과 다르거나(OutOfSync) 비정상인 앱 수. Argo CD는 평일 10~20시만 가동. 자세히: Argo CD (GitOps)
     대시보드\",\n      \"gridPos\": {\n        \"h\": 6,\n        \"w\": 4,\n        \"x\":
-    0,\n        \"y\": 26\n      },\n      \"fieldConfig\": {\n        \"defaults\":
+    0,\n        \"y\": 28\n      },\n      \"fieldConfig\": {\n        \"defaults\":
     {\n          \"unit\": \"short\",\n          \"thresholds\": {\n            \"mode\":
     \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
     \"green\",\n                \"value\": null\n              },\n              {\n
@@ -422,7 +425,7 @@ data:
     \"kill switch 자가 점검\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n
     \       \"uid\": \"prometheus\"\n      },\n      \"description\": \"마지막으로 성공한
     월간 자가 점검(Pub/Sub 인증 + 차단 대상 RBAC dry-run)으로부터 경과 시간\",\n      \"gridPos\": {\n
-    \       \"h\": 6,\n        \"w\": 4,\n        \"x\": 4,\n        \"y\": 26\n      },\n
+    \       \"h\": 6,\n        \"w\": 4,\n        \"x\": 4,\n        \"y\": 28\n      },\n
     \     \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"s\",\n
     \         \"thresholds\": {\n            \"mode\": \"absolute\",\n            \"steps\":
     [\n              {\n                \"color\": \"green\",\n                \"value\":
@@ -444,7 +447,7 @@ data:
     {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n
     \     \"description\": \"컨테이너 메모리 사용 / limit 중 최댓값. 90% 넘으면 OOMKilled 직전 (오른쪽
     상위 5개 참고)\",\n      \"gridPos\": {\n        \"h\": 6,\n        \"w\": 4,\n        \"x\":
-    8,\n        \"y\": 26\n      },\n      \"fieldConfig\": {\n        \"defaults\":
+    8,\n        \"y\": 28\n      },\n      \"fieldConfig\": {\n        \"defaults\":
     {\n          \"unit\": \"percentunit\",\n          \"thresholds\": {\n            \"mode\":
     \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
     \"green\",\n                \"value\": null\n              },\n              {\n
@@ -467,7 +470,7 @@ data:
     \"메모리 사용률 상위 5 (사용 / limit)\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n
     \       \"uid\": \"prometheus\"\n      },\n      \"description\": \"limit에 가까운
     컨테이너. 지속적으로 주황·빨강이면 requests/limit 상향 검토\",\n      \"gridPos\": {\n        \"h\":
-    6,\n        \"w\": 12,\n        \"x\": 12,\n        \"y\": 26\n      },\n      \"fieldConfig\":
+    6,\n        \"w\": 12,\n        \"x\": 12,\n        \"y\": 28\n      },\n      \"fieldConfig\":
     {\n        \"defaults\": {\n          \"unit\": \"percentunit\",\n          \"min\":
     0,\n          \"max\": 1,\n          \"thresholds\": {\n            \"mode\":
     \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
