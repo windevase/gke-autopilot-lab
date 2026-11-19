@@ -87,8 +87,9 @@ jobs:
           path: app/lab-api/sbom.cdx.json
           retention-days: 30
 
+      # 운영 저장소에서만: 공개 스냅샷 저장소(gke-autopilot-lab)에는 서명 키·패키지 쓰기 권한이 없어 빌드·스캔·SBOM 까지만
       - name: push → 서명 → SBOM 증명 → 검증 (main)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'windevase/gcp'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
