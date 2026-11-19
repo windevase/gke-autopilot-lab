@@ -1,0 +1,25 @@
+# lab-api: SRE·공급망 실습용 샘플 서비스 (서명된 이미지 digest, 24시간 2대 Spot) — 매니페스트 k8s/lab-api
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lab-api
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:windevase/gcp.git
+    targetRevision: main
+    path: k8s/lab-api
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-api
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # Git = 원본. 클러스터에서 직접 바꾼 내용은 되돌려짐
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true # Deployment → Rollout 전환 때 새 Rollout 이 정상이 된 뒤에 옛 Deployment 삭제(무중단)
+    managedNamespaceMetadata:
+      labels: # Pod Security restricted (다른 네임스페이스와 같은 수준)
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/warn: restricted
+        pod-security.kubernetes.io/audit: restricted

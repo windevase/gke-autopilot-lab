@@ -150,6 +150,15 @@ containerSecurityContext:
   allowPrivilegeEscalation: false
   capabilities: { drop: ["ALL"] }
 
+# 파드 보안: 차트 기본(fsGroup 1000·runAsUser 100·seccomp)에 runAsNonRoot 를 명시 (Kyverno restricted 정책)
+statefulSet:
+  securityContext:
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    runAsUser: 100
+    runAsNonRoot: true
+    seccompProfile: { type: RuntimeDefault }
+
 environment:
   AWS_CONFIG_FILE: /etc/aws/config
   GUARD_APPROVERS: windevase # apply 직전 감시가 인정하는 승인자·해제 라벨 부착자 (공백 구분)
@@ -170,28 +179,44 @@ extraVolumes:
     configMap: { name: atlantis-guard, defaultMode: 0555 }
   - name: gcp-platform
     secret: { secretName: atlantis-gcp-platform, optional: true, defaultMode: 0440 } # uid 100 은 fsGroup 1000 으로 읽음
+  - name: plugins # init-jq 가 jq 를 설치하는 공유 폴더
+    emptyDir: { sizeLimit: 20Mi }
+  - name: init-tmp
+    emptyDir: { sizeLimit: 20Mi }
 extraVolumeMounts:
   - { name: aws-token, mountPath: /var/run/secrets/aws, readOnly: true }
   - { name: aws-config, mountPath: /etc/aws, readOnly: true }
   - { name: guard, mountPath: /opt/guard, readOnly: true }
   - { name: gcp-platform, mountPath: /etc/gcp-platform, readOnly: true }
+  - { name: plugins, mountPath: /plugins, readOnly: true }
 
-# 감시 스크립트용 jq (이미지에 없음) — 체크섬 확인 후 공유 폴더(/plugins, PATH 포함)에 설치
+# 감시 스크립트용 jq (이미지에 없음) — 체크섬 확인 후 공유 폴더(/plugins, 이미지 PATH 에 포함)에 설치
+# 차트 initConfig 는 리소스를 지정할 수 없어(→ Autopilot 이 init 컨테이너에 임시 스토리지 1Gi 과금, Kyverno 정책 위반)
+# 일반 initContainers + emptyDir 로 같은 동작을 구성 (2026-11-19)
 initConfig:
-  enabled: true
-  image: alpine:3.24.3
-  sharedDir: /plugins
-  sizeLimit: 20Mi
-  containerSecurityContext:
-    runAsNonRoot: true
-    runAsUser: 100
-    allowPrivilegeEscalation: false
-    capabilities: { drop: ["ALL"] }
-  script: |
-    #!/bin/sh
-    set -eu
-    JQ_VERSION=1.8.1
-    JQ_SHA256=020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d
-    wget -q "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-amd64" -O "${INIT_SHARED_DIR}/jq"
-    echo "${JQ_SHA256}  ${INIT_SHARED_DIR}/jq" | sha256sum -c
-    chmod 755 "${INIT_SHARED_DIR}/jq"
+  enabled: false
+initContainers:
+  - name: init-jq
+    image: alpine:3.24.3
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        set -eu
+        JQ_VERSION=1.8.1
+        JQ_SHA256=020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d
+        wget -q "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-amd64" -O /plugins/jq
+        echo "${JQ_SHA256}  /plugins/jq" | sha256sum -c
+        chmod 755 /plugins/jq
+    workingDir: /tmp
+    volumeMounts:
+      - { name: plugins, mountPath: /plugins }
+      - { name: init-tmp, mountPath: /tmp }
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 100
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: { drop: ["ALL"] }
+    resources:
+      requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+      limits: { memory: 64Mi }

@@ -1,0 +1,59 @@
+# canary 판정: canary 파드(rollouts-pod-template-hash)만의 SLO 소진 속도 = 오류 비율 ÷ 허용 오류 비율
+#   가용성: 5xx 비율 ÷ 0.005(99.5%) / 지연: 300ms 초과 비율 ÷ 0.01(99%) — SLO 원본 slo/lab-api.yaml 과 같은 목표
+#   page 경보 기준(14.4배)을 넘으면 실패 → Rollout 중단(자동 롤백). 2분 뒤부터 1분 간격 4회, 1회 실패로 중단
+# **판정할 수 없으면 실패(fail-safe)**: canary 요청이 없으면 비율이 비어(result 없음) 실패, 별도로 canary 트래픽 최소량(초당 0.2건)도 검사
+#   (2026-11-19 첫 시연: 요청 없음을 0=통과로 계산 + 트래픽 생성기 keep-alive 로 canary 요청 0 → 장애 버전이 그대로 배포됨)
+# 레이블 rollouts_pod_template_hash 는 ServiceMonitor podTargetLabels 로 붙음. 조회는 Prometheus 직접(NetworkPolicy 허용)
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: slo-burn-rate
+  namespace: lab-api
+spec:
+  args:
+    - name: canary-hash
+  metrics:
+    - name: canary-traffic # canary 가 실제로 트래픽을 받는지 (못 받으면 소진 속도 판정이 무의미)
+      initialDelay: 2m
+      interval: 1m
+      count: 4
+      failureLimit: 0
+      successCondition: len(result) > 0 && result[0] >= 0.2
+      provider:
+        prometheus:
+          address: http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{job="lab-api",handler="items",rollouts_pod_template_hash="{{args.canary-hash}}"}[2m]))
+    - name: availability-burn-rate
+      initialDelay: 2m
+      interval: 1m
+      count: 4
+      failureLimit: 0
+      successCondition: len(result) > 0 && result[0] < 14.4
+      provider:
+        prometheus:
+          address: http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            (
+              (sum(rate(http_requests_total{job="lab-api",handler="items",code=~"5..",rollouts_pod_template_hash="{{args.canary-hash}}"}[2m])) or vector(0))
+              /
+              sum(rate(http_requests_total{job="lab-api",handler="items",rollouts_pod_template_hash="{{args.canary-hash}}"}[2m]))
+            ) / 0.005
+    - name: latency-burn-rate
+      initialDelay: 2m
+      interval: 1m
+      count: 4
+      failureLimit: 0
+      successCondition: len(result) > 0 && result[0] < 14.4
+      provider:
+        prometheus:
+          address: http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            (
+              clamp_min(
+                (sum(rate(http_request_duration_seconds_count{job="lab-api",handler="items",rollouts_pod_template_hash="{{args.canary-hash}}"}[2m])) or vector(0))
+                - (sum(rate(http_request_duration_seconds_bucket{job="lab-api",handler="items",le="0.3",rollouts_pod_template_hash="{{args.canary-hash}}"}[2m])) or vector(0)),
+                0)
+              /
+              sum(rate(http_request_duration_seconds_count{job="lab-api",handler="items",rollouts_pod_template_hash="{{args.canary-hash}}"}[2m]))
+            ) / 0.01

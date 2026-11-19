@@ -2,7 +2,7 @@
 # Updates both places that allow-list this PC:
 #   1) GKE control plane authorized network  (terraform.tfvars master_authorized_cidrs "my-pc" -> terraform apply)
 #   2) Cloudflare WAF custom rule "ArgoCD admin PC only" (IPv4 /32 + IPv6 /64, zone rules are managed via API)
-#      covers every admin-PC-only host: argocd + bao (OpenBao, 2026-11-15)
+#      covers every admin-PC-only host: argocd + bao (OpenBao, 2026-11-15) + git (Forgejo, 2026-11-19)
 #
 # Usage:
 #   .\tools\update-myip.ps1            # show current vs configured, change nothing

@@ -1,0 +1,112 @@
+# lab-api 이미지 공급망: 테스트 → 빌드 → 취약점 스캔(Trivy) → SBOM(CycloneDX) → [main] push → cosign 서명·SBOM 증명 → 검증
+# - PR: 빌드·스캔·SBOM 까지 (push·서명 없음). main: GHCR 에 push 하고 digest 에 서명
+# - 도구는 GitHub Action 대신 릴리스 바이너리를 체크섬 확인 후 설치 (2025 trivy-action 태그 탈취 사고 같은 액션 공급망 위험 축소)
+# - cosign 은 키 방식(키: Actions Secret, 공개키: app/lab-api/cosign.pub). 투명성 로그(Rekor)·TSA 를 쓰지 않는 signing config
+#   → 공개 로그에 private 저장소 정보가 남지 않음. 대신 검증 때 --insecure-ignore-tlog 가 필요(키 자체가 신뢰 근거)
+# - 배포는 GitOps: 서명된 digest 를 k8s/lab-api 매니페스트에 PR 로 반영 (CI 가 클러스터를 직접 바꾸지 않음)
+name: lab-api
+
+on:
+  pull_request:
+    paths: ["app/lab-api/**", ".github/workflows/lab-api.yml"]
+  push:
+    branches: [main]
+    paths: ["app/lab-api/**", ".github/workflows/lab-api.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lab-api-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/lab-api
+  TRIVY_VERSION: 0.76.2 # aquasecurity/trivy
+  COSIGN_VERSION: 3.1.4 # sigstore/cosign
+
+jobs:
+  build:
+    name: 테스트·빌드·스캔·서명
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # GHCR push (main 에서만 사용)
+    defaults:
+      run:
+        working-directory: app/lab-api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: app/lab-api/go.mod
+          cache-dependency-path: app/lab-api/go.sum
+      - name: gofmt / go vet / test
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "::error::gofmt 필요"; exit 1; }
+          go vet ./...
+          go test -race -count=1 ./...
+
+      - name: Trivy·cosign 설치 (체크섬 확인)
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/bin"; mkdir -p "$d"; cd "$RUNNER_TEMP"
+          f="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLO "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/$f"
+          curl -fsSLO "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " $f\$" "trivy_${TRIVY_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "$f" -C "$d" trivy
+          curl -fsSLO "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64"
+          curl -fsSLO "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign_checksums.txt"
+          grep " cosign-linux-amd64\$" cosign_checksums.txt | sha256sum -c -
+          install -m 0755 cosign-linux-amd64 "$d/cosign"
+          echo "$d" >> "$GITHUB_PATH"
+
+      - name: 이미지 빌드
+        run: |
+          v="sha-${GITHUB_SHA::7}"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+          docker build --build-arg VERSION="$v" \
+            --label org.opencontainers.image.source="https://github.com/${{ github.repository }}" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.version="$v" \
+            -t "$IMAGE:$v" .
+
+      - name: 취약점 스캔 (HIGH·CRITICAL, 수정판 있는 것만 실패)
+        run: |
+          trivy image --no-progress --scanners vuln --format table "$IMAGE:$VERSION" | tee "$RUNNER_TEMP/trivy.txt"
+          trivy image --no-progress --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE:$VERSION"
+          { echo '### Trivy 스캔'; echo '```'; tail -n 30 "$RUNNER_TEMP/trivy.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: SBOM (CycloneDX)
+        run: trivy image --no-progress --format cyclonedx --output sbom.cdx.json "$IMAGE:$VERSION"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lab-api-sbom-${{ github.sha }}
+          path: app/lab-api/sbom.cdx.json
+          retention-days: 30
+
+      - name: push → 서명 → SBOM 증명 → 검증 (main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE:$VERSION"
+          ref=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$VERSION")
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY --signing-config cosign-signing-config.json "$ref"
+          cosign attest --yes --key env://COSIGN_PRIVATE_KEY --signing-config cosign-signing-config.json \
+            --type cyclonedx --predicate sbom.cdx.json "$ref"
+          cosign verify --key cosign.pub --insecure-ignore-tlog "$ref" > /dev/null
+          cosign verify-attestation --key cosign.pub --insecure-ignore-tlog --type cyclonedx "$ref" > /dev/null
+          {
+            echo '### 배포할 이미지 (서명·SBOM 증명 검증 완료)'
+            echo '```'
+            echo "$ref"
+            echo '```'
+            echo "검증: \`cosign verify --key app/lab-api/cosign.pub --insecure-ignore-tlog $ref\`"
+          } >> "$GITHUB_STEP_SUMMARY"

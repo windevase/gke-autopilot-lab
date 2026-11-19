@@ -1,0 +1,46 @@
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: require-pinned-image
+  annotations:
+    policies.kyverno.io/title: 이미지 버전 고정 (latest 금지)
+    policies.kyverno.io/category: 공급망
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      이미지는 latest 가 아닌 고정 태그 또는 digest 로만. 재현 가능한 배포, 버전 갱신은 Renovate·CI PR 로.
+spec:
+  validationActions: [Audit] # 클러스터는 정책 보고서만(차단 없음). CI 의 kyverno apply 는 위반이면 실패
+  evaluation:
+    background:
+      enabled: true
+  autogen: # 대상 종류를 아래에 직접 나열(Rollout 포함) → 자동 생성 끔
+    podControllers:
+      controllers: []
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [""], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [pods] }
+      - { apiGroups: [apps], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [deployments, statefulsets, daemonsets] }
+      - { apiGroups: [batch], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [jobs, cronjobs] }
+      - { apiGroups: [argoproj.io], apiVersions: [v1alpha1], operations: [CREATE, UPDATE], resources: [rollouts] }
+  matchConditions: # GKE 관리형 네임스페이스·helm test hook(Argo CD 가 실행하지 않음)은 제외
+    - name: not-helm-test-hook
+      expression: object.metadata.?annotations[?'helm.sh/hook'].orValue('') != 'test'
+    - name: not-managed-namespace
+      expression: >-
+        !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease', 'gke-managed-system', 'gke-gmp-system', 'gmp-public', 'gke-managed-cim', 'gke-managed-filestorecsi'])
+  variables:
+    # 종류마다 파드 스펙 위치가 다름 (Rollout 은 Kyverno 자동 생성 대상이 아니라 직접 계산)
+    - name: podSpec
+      expression: >-
+        object.kind == 'Pod' ? object.spec :
+        object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec :
+        object.spec.template.spec
+    - name: containers
+      expression: variables.podSpec.containers + variables.podSpec.?initContainers.orValue([])
+  validations:
+    - expression: >-
+        variables.containers.all(c, !c.image.endsWith(':latest') &&
+          (c.image.contains('@') || c.image.substring(c.image.lastIndexOf('/') + 1).contains(':')))
+      messageExpression: >-
+        'latest 이거나 태그·digest 가 없는 이미지: ' + variables.containers.filter(c, c.image.endsWith(':latest') ||
+          !(c.image.contains('@') || c.image.substring(c.image.lastIndexOf('/') + 1).contains(':'))).map(c, c.name + '=' + c.image).join(', ')

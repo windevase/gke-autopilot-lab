@@ -1,0 +1,38 @@
+# Argo Rollouts 컨트롤러 (canary + Prometheus 분석 자동 롤백) — values k8s/argo-rollouts/values.yaml (CRD 는 수동, 머리말 참고)
+# replicas 는 오프아워 Job 이 정함(평일 10~20시) → Argo 는 replicas 무시
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-rollouts
+      targetRevision: 2.43.12 # app v1.10.2
+      helm:
+        releaseName: argo-rollouts
+        skipCrds: true
+        valueFiles:
+          - $values/k8s/argo-rollouts/values.yaml
+    - repoURL: git@github.com:windevase/gcp.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-rollouts
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers: [/spec/replicas]
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/warn: restricted
+        pod-security.kubernetes.io/audit: restricted

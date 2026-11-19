@@ -1,0 +1,44 @@
+# 트래픽 생성기 — SLO 지표가 비지 않도록 /api/items 를 초당 2건 상시 호출 (같은 서명 이미지의 loadgen 모드)
+# 장애 주입 시연 때도 이 트래픽으로 에러 버짓 소진·canary 분석이 움직인다. 비용 50m/64Mi Spot
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-api-loadgen
+  namespace: lab-api
+  labels:
+    app.kubernetes.io/name: lab-api-loadgen
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lab-api-loadgen
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: lab-api-loadgen
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      terminationGracePeriodSeconds: 10
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: loadgen
+          image: ghcr.io/windevase/lab-api@sha256:146f512ec5793c94cc9f7672a6c0e00e00b9c5d3da303377ea5ff9f7983aca6c # sha-4c5f38e (lab-api 와 같은 이미지)
+          args: ["loadgen"]
+          env:
+            - { name: LOADGEN_TARGET, value: "http://lab-api.lab-api.svc.cluster.local/api/items" }
+            - { name: LOADGEN_RPS, value: "2" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+            limits: { memory: 64Mi }

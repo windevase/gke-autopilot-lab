@@ -1,0 +1,34 @@
+# 기본 인바운드 차단 + 필요한 것만
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: lab-api
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+# 8080(서비스): 같은 네임스페이스(트래픽 생성기·canary 분석 등)에서만. 외부 공개 없음
+# 9090(지표): monitoring 의 Prometheus 에서만
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-api
+  namespace: lab-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lab-api
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { protocol: TCP, port: 8080 }
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+          podSelector:
+            matchLabels: { app.kubernetes.io/name: prometheus }
+      ports:
+        - { protocol: TCP, port: 9090 }

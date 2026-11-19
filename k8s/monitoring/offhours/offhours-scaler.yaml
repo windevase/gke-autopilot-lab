@@ -8,6 +8,8 @@
 # - Atlantis: 켜는 것은 수동(tools/atlantis.ps1 on), **끄는 것은 20:00 에 자동**(켜 둔 채 잊는 것 방지, 2026-11-14).
 #   진행 중 plan/apply 는 terminationGracePeriodSeconds(600s) 안에서 마무리 — 20:00 직전에는 apply 를 시작하지 않는다
 # - OpenBao(ns openbao): Atlantis 와 같이 켜는 것은 수동(tools/atlantis.ps1 on), 끄는 것은 20:00 자동 (2026-11-15)
+# - Argo Rollouts 컨트롤러(ns argo-rollouts): Argo CD 와 같이 평일 10:00 기동 / 20:00 종료 (2026-11-19, 배포는 Argo CD 가 켜져 있을 때만)
+# - Kyverno 3개 컨트롤러(ns kyverno): 같은 시간 (2026-11-19, Audit 전용 — 웹훅 실패 정책 Ignore 라 꺼져 있어도 파드 생성 영향 없음)
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -121,7 +123,59 @@ subjects:
     name: offhours-scaler
     namespace: monitoring
 ---
-# 매일 20:00 Grafana·cloudflared·Argo CD·Atlantis·OpenBao 종료 (주말엔 이미 꺼져 있으므로 영향 없음)
+# Argo Rollouts 컨트롤러 기동·종료 권한 (argo-rollouts 네임스페이스, 같은 ServiceAccount)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: offhours-scaler
+  namespace: argo-rollouts
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["argo-rollouts"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: offhours-scaler
+  namespace: argo-rollouts
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: offhours-scaler
+subjects:
+  - kind: ServiceAccount
+    name: offhours-scaler
+    namespace: monitoring
+---
+# Kyverno 컨트롤러 기동·종료 권한 (kyverno 네임스페이스, 같은 ServiceAccount)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: offhours-scaler
+  namespace: kyverno
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["kyverno-admission-controller", "kyverno-background-controller", "kyverno-reports-controller"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: offhours-scaler
+  namespace: kyverno
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: offhours-scaler
+subjects:
+  - kind: ServiceAccount
+    name: offhours-scaler
+    namespace: monitoring
+---
+# 매일 20:00 Grafana·cloudflared·Argo CD·Atlantis·OpenBao·Argo Rollouts·Kyverno 종료 (주말엔 이미 꺼져 있으므로 영향 없음)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -185,8 +239,27 @@ spec:
               resources:
                 requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
                 limits: { memory: 64Mi }
+            - name: rollouts-to-zero
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment/argo-rollouts", "-n", "argo-rollouts", "--replicas=0"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+            - name: kyverno-to-zero
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment/kyverno-admission-controller", "deployment/kyverno-background-controller",
+                     "deployment/kyverno-reports-controller", "-n", "kyverno", "--replicas=0"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
 ---
-# 평일 10:00 Grafana·cloudflared·Argo CD 기동 (금 20시 종료 → 월 10시 기동)
+# 평일 10:00 Grafana·cloudflared·Argo CD·Argo Rollouts·Kyverno 기동 (금 20시 종료 → 월 10시 기동)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -226,6 +299,25 @@ spec:
               image: registry.k8s.io/kubectl:v1.37.2
               args: ["scale", "deployment/argocd-server", "deployment/argocd-repo-server", "deployment/argocd-redis",
                      "statefulset/argocd-application-controller", "-n", "argocd", "--replicas=1"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+            - name: rollouts-to-one
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment/argo-rollouts", "-n", "argo-rollouts", "--replicas=1"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+                limits: { memory: 64Mi }
+            - name: kyverno-to-one
+              image: registry.k8s.io/kubectl:v1.37.2
+              args: ["scale", "deployment/kyverno-admission-controller", "deployment/kyverno-background-controller",
+                     "deployment/kyverno-reports-controller", "-n", "kyverno", "--replicas=1"]
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities: { drop: ["ALL"] }

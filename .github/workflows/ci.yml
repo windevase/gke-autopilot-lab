@@ -90,6 +90,58 @@ jobs:
           kubeconform -strict -summary -ignore-missing-schemas rendered-atlantis.yaml
           bash -n k8s/atlantis/manifests/guard/*.sh
 
+  # Kyverno 정책(k8s/kyverno/policies, 클러스터에는 Audit) 을 배포 전에 검사 — 위반이면 실패
+  # 대상: 저장소 매니페스트 + 클러스터에 올라가는 Helm 차트 렌더링(차트 버전은 Argo 앱·install.ps1 에서 읽음)
+  policy:
+    name: Kyverno 정책 검사
+    runs-on: ubuntu-latest
+    env:
+      KYVERNO_VERSION: 1.20.0 # kyverno/kyverno
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5
+        with:
+          version: v4.1.4
+      - name: Kyverno CLI 설치 (체크섬 확인)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          f="kyverno-cli_v${KYVERNO_VERSION}_linux_x86_64.tar.gz"
+          curl -fsSLO "https://github.com/kyverno/kyverno/releases/download/v${KYVERNO_VERSION}/$f"
+          curl -fsSLO "https://github.com/kyverno/kyverno/releases/download/v${KYVERNO_VERSION}/checksums.txt"
+          grep " $f\$" checksums.txt | sha256sum -c -
+          tar -xzf "$f" kyverno && install -m 0755 kyverno /usr/local/bin/kyverno 2>/dev/null || sudo install -m 0755 kyverno /usr/local/bin/kyverno
+          kyverno version
+      - name: Helm 차트 렌더링
+        run: |
+          set -euo pipefail
+          ver() { sed -nE 's/^ *targetRevision: *([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "k8s/apps/$1.yaml" | head -1; }
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null
+          helm repo add argo https://argoproj.github.io/argo-helm >/dev/null
+          helm repo add runatlantis https://runatlantis.github.io/helm-charts >/dev/null
+          helm repo add openbao https://openbao.github.io/openbao-helm >/dev/null
+          mkdir -p "$RUNNER_TEMP/render" && r="$RUNNER_TEMP/render"
+          helm template kps prometheus-community/kube-prometheus-stack --version "$(ver kps)" -n monitoring -f k8s/monitoring/kps/values.yaml > "$r/kps.yaml"
+          helm template argocd argo/argo-cd --version "$(sed -nE 's/^\$chartVersion = "([0-9.]+)".*/\1/p' k8s/argocd/install.ps1)" -n argocd -f k8s/argocd/values.yaml > "$r/argocd.yaml"
+          helm template atlantis runatlantis/atlantis --version "$(ver atlantis)" -n atlantis -f k8s/atlantis/values.yaml > "$r/atlantis.yaml"
+          kubectl kustomize k8s/atlantis/manifests > "$r/atlantis-manifests.yaml"
+          helm template openbao openbao/openbao --version "$(ver openbao)" -n openbao -f k8s/openbao/values.yaml > "$r/openbao.yaml"
+          helm template argo-rollouts argo/argo-rollouts --version "$(ver argo-rollouts)" -n argo-rollouts -f k8s/argo-rollouts/values.yaml > "$r/argo-rollouts.yaml"
+          helm repo add kyverno https://kyverno.github.io/kyverno/ >/dev/null
+          helm template kyverno kyverno/kyverno --version "$(ver kyverno)" -n kyverno -f k8s/kyverno/values.yaml > "$r/kyverno.yaml"
+          wc -l "$r"/*.yaml
+      - name: 정책 적용 (위반·오류 있으면 실패)
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r f; do args+=(--resource "$f"); done < <(find k8s -name '*.yaml' ! -name 'values.yaml' ! -path 'k8s/kyverno/*'; ls "$RUNNER_TEMP"/render/*.yaml)
+          # 이미지 서명 정책(verify-*, ImageValidatingPolicy)은 파드 전용 + CLI 가 Argo Application 등 모르는 종류를 매핑하다 실패 → 제외
+          # (서명은 lab-api CI 가 빌드 때 검증, 클러스터에서는 Kyverno 가 실제 파드에 대해 보고)
+          mapfile -t policies < <(ls k8s/kyverno/policies/*.yaml | grep -v '/verify-')
+          kyverno apply "${policies[@]}" "${args[@]}" | tee "$RUNNER_TEMP/kyverno.txt"
+          grep -q "fail: 0, warn: 0, error: 0" "$RUNNER_TEMP/kyverno.txt" || { echo "::error::Kyverno 정책 위반 또는 오류"; exit 1; }
+          { echo '### Kyverno 정책 검사'; echo '```'; tail -n 1 "$RUNNER_TEMP/kyverno.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
   # infra-terraform 원본과 사본이 같은지 (다르면 실패 — 원본을 먼저 고치고 merge 한 뒤 사본을 갱신)
 
   secrets:
@@ -131,7 +183,9 @@ jobs:
                       gen_home_dashboard.py:lab-home.json \
                       gen_argocd_dashboard.py:lab-argocd.json \
                       gen_github_dashboard.py:lab-github.json \
-                      gen_github_usage_dashboard.py:lab-github-usage.json; do
+                      gen_github_usage_dashboard.py:lab-github-usage.json \
+                      gen_openbao_dashboard.py:lab-openbao.json \
+                      gen_slo_dashboard.py:lab-slo.json; do
             gen="${pair%%:*}"; json="${pair##*:}"
             python "$gen" "/tmp/$json"
             diff <(python -m json.tool --sort-keys "/tmp/$json") <(python -m json.tool --sort-keys "$json")
@@ -149,6 +203,20 @@ jobs:
                   assert json.loads(body) == json.load(open(name, encoding="utf-8")), f"{cm_file}: {name} 불일치 (ConfigMap 재생성 필요)"
               print("ok:", cm_file)
           EOF
+      - name: SLO 원본 = 생성된 PrometheusRule (Sloth)
+        env:
+          SLOTH_VERSION: 0.16.0 # slok/sloth
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "https://github.com/slok/sloth/releases/download/v${SLOTH_VERSION}/sloth-linux-amd64"
+          curl -fsSLO "https://github.com/slok/sloth/releases/download/v${SLOTH_VERSION}/checksums.txt"
+          grep " sloth-linux-amd64\$" checksums.txt | sha256sum -c -
+          install -m 0755 sloth-linux-amd64 sloth
+          cd "$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/sloth" generate -i slo/lab-api.yaml -o "$RUNNER_TEMP/slo-rules.yaml" \
+            --slo-period-windows-path=slo/windows --default-slo-period=7d --no-log
+          diff "$RUNNER_TEMP/slo-rules.yaml" k8s/lab-api/slo-rules.yaml && echo "ok: slo/lab-api.yaml = k8s/lab-api/slo-rules.yaml"
       - name: budget-guard 스크립트 문법
         run: |
           pip install --quiet pyyaml

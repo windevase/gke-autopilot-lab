@@ -1,0 +1,37 @@
+# lab-api 이미지(ghcr.io/windevase/lab-api)는 CI 가 cosign 키로 서명한 것만 — 공개키 app/lab-api/cosign.pub 와 같음
+# 서명은 투명성 로그(Rekor) 없이 만듦(private 저장소 정보 비공개) → 검증도 tlog 를 보지 않음(키 자체가 신뢰 근거)
+# Audit: 서명 안 된 이미지가 배포되면 정책 보고서에 위반으로 남음(차단 없음). CI 의 kyverno apply 도 실제 레지스트리에서 서명을 확인
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: verify-lab-api-signature
+  annotations:
+    policies.kyverno.io/title: lab-api 이미지 서명 검증 (cosign)
+    policies.kyverno.io/category: 공급망
+    policies.kyverno.io/severity: high
+spec:
+  validationActions: [Audit]
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [""], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [pods] }
+  matchImageReferences:
+    - glob: "ghcr.io/windevase/lab-api*"
+  attestors:
+    - name: cosign
+      cosign:
+        key:
+          data: |
+            -----BEGIN PUBLIC KEY-----
+            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKnod3ffkTHZHRVA0So5WJc3RJy8Z
+            oZ2iof824OfRgtb4gQY/aWv1x1WdlrWQgHi5DdSKkgUDftk7QITcDlrRug==
+            -----END PUBLIC KEY-----
+        ctlog:
+          insecureIgnoreTlog: true
+          insecureIgnoreSCT: true
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.cosign])).all(e, e > 0)
+      message: "lab-api 이미지가 CI 서명 키로 서명되지 않았습니다"

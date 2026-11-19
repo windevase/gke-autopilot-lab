@@ -1,0 +1,47 @@
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: require-spot-node
+  annotations:
+    policies.kyverno.io/title: Spot 노드 사용
+    policies.kyverno.io/category: 비용
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/description: >-
+      nodeSelector cloud.google.com/gke-spot=true (Autopilot Spot 은 일반 대비 약 60~70% 저렴). 예외는 matchConditions 에 근거와 함께.
+spec:
+  validationActions: [Audit] # 클러스터는 정책 보고서만(차단 없음). CI 의 kyverno apply 는 위반이면 실패
+  evaluation:
+    background:
+      enabled: true
+  autogen: # 대상 종류를 아래에 직접 나열(Rollout 포함) → 자동 생성 끔
+    podControllers:
+      controllers: []
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [""], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [pods] }
+      - { apiGroups: [apps], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [deployments, statefulsets, daemonsets] }
+      - { apiGroups: [batch], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [jobs, cronjobs] }
+      - { apiGroups: [argoproj.io], apiVersions: [v1alpha1], operations: [CREATE, UPDATE], resources: [rollouts] }
+  matchConditions: # GKE 관리형 네임스페이스·helm test hook(Argo CD 가 실행하지 않음)은 제외
+    # 예외: atlantis — apply 중 선점되면 부분 적용·잠금 잔존 위험이라 의도적으로 비 Spot
+    - name: not-atlantis
+      expression: object.metadata.?namespace.orValue('') != 'atlantis' 
+    - name: not-helm-test-hook
+      expression: object.metadata.?annotations[?'helm.sh/hook'].orValue('') != 'test'
+    - name: not-managed-namespace
+      expression: >-
+        !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease', 'gke-managed-system', 'gke-gmp-system', 'gmp-public', 'gke-managed-cim', 'gke-managed-filestorecsi'])
+  variables:
+    # 종류마다 파드 스펙 위치가 다름 (Rollout 은 Kyverno 자동 생성 대상이 아니라 직접 계산)
+    - name: podSpec
+      expression: >-
+        object.kind == 'Pod' ? object.spec :
+        object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec :
+        object.spec.template.spec
+    - name: containers
+      expression: variables.podSpec.containers + variables.podSpec.?initContainers.orValue([])
+  validations:
+    - expression: >-
+        variables.podSpec.?nodeSelector.orValue({}).exists(k, k == 'cloud.google.com/gke-spot') &&
+        variables.podSpec.nodeSelector['cloud.google.com/gke-spot'] == 'true'
+      message: 'nodeSelector cloud.google.com/gke-spot: "true" 로 Spot 노드를 쓰세요'

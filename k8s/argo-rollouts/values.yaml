@@ -1,0 +1,29 @@
+# Argo Rollouts (canary 배포 + Prometheus 분석으로 자동 롤백) — Argo 앱 argo-rollouts (k8s/apps/argo-rollouts.yaml)
+# - CRD 는 Argo CD 가 다루지 않음(argocd values resourceExclusions) → 차트 버전을 올릴 때 CRD 만 수동:
+#     helm template argo-rollouts argo/argo-rollouts --version <버전> --set installCRDs=true --show-only templates/crds/... 로 CRD 만 뽑아
+#     kubectl apply --server-side -f <파일>   (CRD 가 crds/ 가 아닌 템플릿 안에 있어 helm show crds 는 비어 있음)
+# - 평일 10~20시만 가동(오프아워 Job 이 Argo CD 와 함께 켜고 끔). 배포는 Argo CD 가 켜져 있을 때만 일어나므로 같은 시간이면 충분
+#   꺼져 있어도 Rollout 의 파드(ReplicaSet)는 그대로 동작 — 진행 중 canary 만 다음 기동까지 멈춤
+# - 분석은 Prometheus 직접 조회(kps-kube-prometheus-stack-prometheus:9090) → monitoring NetworkPolicy 에서 이 컨트롤러 허용
+installCRDs: false
+keepCRDs: true
+
+controller:
+  replicas: 1 # 단일 실습 클러스터 — 리더 선출 이중화 불필요(꺼져 있어도 서비스 영향 없음)
+  nodeSelector:
+    cloud.google.com/gke-spot: "true"
+  terminationGracePeriodSeconds: 25 # Spot 상한
+  resources:
+    requests: { cpu: 50m, memory: 128Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 128Mi }
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: { type: RuntimeDefault }
+
+dashboard:
+  enabled: false
+
+# 서비스 메시·인그레스 연동 없음(파드 수 비율 canary) → 외부 제공자 RBAC 불필요
+providerRBAC:
+  enabled: false

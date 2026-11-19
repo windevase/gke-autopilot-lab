@@ -1,0 +1,18 @@
+# Kyverno 정책 (ValidatingPolicy·ImageValidatingPolicy, 클러스터 범위, 전부 Audit) — k8s/kyverno/policies
+# 같은 폴더를 CI(policy job)가 kyverno apply 로 배포 전 검사에 씀 → "배포 전 CI 차단 + 배포 후 클러스터 보고서" 두 단계
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:windevase/gcp.git
+    targetRevision: main
+    path: k8s/kyverno/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

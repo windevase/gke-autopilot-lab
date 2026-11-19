@@ -4,7 +4,8 @@
   "extends": ["config:recommended", ":timezone(Asia/Seoul)", "schedule:weekly", ":semanticCommitsDisabled"],
   "labels": ["dependencies"],
   "prConcurrentLimit": 5,
-  "enabledManagers": ["argocd", "kubernetes", "custom.regex"],
+  "enabledManagers": ["argocd", "kubernetes", "custom.regex", "gomod", "dockerfile"],
+  "postUpdateOptions": ["gomodTidy"],
   "argocd": {
     "managerFilePatterns": ["/^k8s/apps/.+\\.yaml$/"]
   },
@@ -12,6 +13,14 @@
     "managerFilePatterns": ["/^k8s/monitoring/.+\\.yaml$/"]
   },
   "customManagers": [
+    {
+      "description": "CI 도구 릴리스 바이너리 (Trivy·cosign·Sloth, 체크섬 확인 설치)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/lab-api\\.yml$/", "/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": ["TRIVY_VERSION: (?<currentValue>\\d+\\.\\d+\\.\\d+) # (?<depName>aquasecurity/trivy)", "COSIGN_VERSION: (?<currentValue>\\d+\\.\\d+\\.\\d+) # (?<depName>sigstore/cosign)", "SLOTH_VERSION: (?<currentValue>\\d+\\.\\d+\\.\\d+) # (?<depName>slok/sloth)", "KYVERNO_VERSION: (?<currentValue>\\d+\\.\\d+\\.\\d+) # (?<depName>kyverno/kyverno)"],
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
     {
       "description": "kube-prometheus-stack 차트 버전 (CI 렌더링 검증, 부트스트랩 스크립트)",
       "customType": "regex",

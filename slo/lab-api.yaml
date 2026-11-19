@@ -1,0 +1,51 @@
+# lab-api SLO (원본) → sloth 가 PrometheusRule 생성: k8s/lab-api/slo-rules.yaml (직접 수정 금지)
+#   재생성: sloth generate -i slo/lab-api.yaml -o k8s/lab-api/slo-rules.yaml --slo-period-windows-path=slo/windows --default-slo-period=7d
+#   CI 가 원본 = 생성 결과 일치를 검사(ci.yml lint). 대시보드: lab-slo (gen_slo_dashboard.py)
+# - 대상: GET /api/items (트래픽 생성기 lab-api-loadgen 이 상시 호출)
+# - 기간 7일(Prometheus 보관 기간). 경보 규칙은 Prometheus 안에서만 평가(Alertmanager 없음 → 알림 없음, 대시보드에 상태 표시)
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: lab-api
+  namespace: lab-api
+spec:
+  service: lab-api
+  labels:
+    owner: lab
+  slos:
+    - name: availability
+      objective: 99.5
+      description: "/api/items 응답 중 5xx 가 아닌 비율 99.5% (7일 예산: 요청 200건당 1건 실패 허용)"
+      sli:
+        events:
+          errorQuery: (sum(rate(http_requests_total{job="lab-api",handler="items",code=~"5.."}[{{.window}}])) or on() vector(0))
+          totalQuery: sum(rate(http_requests_total{job="lab-api",handler="items"}[{{.window}}]))
+      alerting:
+        name: LabApiAvailabilityBudgetBurn
+        labels:
+          category: availability
+        annotations:
+          summary: "lab-api 가용성 에러 버짓 소진 속도 높음"
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }
+    - name: latency
+      objective: 99
+      description: "/api/items 응답 중 300ms 이내 비율 99%"
+      sli:
+        events:
+          errorQuery: >-
+            (sum(rate(http_request_duration_seconds_count{job="lab-api",handler="items"}[{{.window}}]))
+            - sum(rate(http_request_duration_seconds_bucket{job="lab-api",handler="items",le="0.3"}[{{.window}}])))
+          totalQuery: sum(rate(http_request_duration_seconds_count{job="lab-api",handler="items"}[{{.window}}]))
+      alerting:
+        name: LabApiLatencyBudgetBurn
+        labels:
+          category: latency
+        annotations:
+          summary: "lab-api 지연(300ms) 에러 버짓 소진 속도 높음"
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }

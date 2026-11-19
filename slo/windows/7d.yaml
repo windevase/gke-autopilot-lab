@@ -1,0 +1,14 @@
+# SLO 기간 7일 창 (Prometheus 보관 기간이 7일이라 30일 SLO 는 계산할 수 없음)
+# Google SRE 워크북의 다중 창 burn rate 기준을 7일로 환산: 예산 비율 = burn rate × 긴 창 / 기간(168h)
+#   page  quick: 14.4배 × 1h  → 8.57%   slow: 6배 × 6h → 21.4%
+#   ticket quick: 3배 × 1d    → 42.9%   slow: 1배 × 3d → 42.9%
+apiVersion: sloth.slok.dev/v1
+kind: AlertWindows
+spec:
+  sloPeriod: 7d
+  page:
+    quick: { errorBudgetPercent: 8.57, shortWindow: 5m, longWindow: 1h }
+    slow: { errorBudgetPercent: 21.4, shortWindow: 30m, longWindow: 6h }
+  ticket:
+    quick: { errorBudgetPercent: 42.9, shortWindow: 2h, longWindow: 1d }
+    slow: { errorBudgetPercent: 42.9, shortWindow: 6h, longWindow: 3d }

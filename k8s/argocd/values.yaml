@@ -35,6 +35,16 @@ configs:
       - apiGroups: [apiextensions.k8s.io]
         kinds: [CustomResourceDefinition]
         clusters: ["*"]
+      # Kyverno 가 만드는 정책 보고서·임시 보고서·요청 객체 — 수가 많고 자주 바뀌어 컨트롤러 캐시(메모리)만 키움 (Kyverno 권장)
+      - apiGroups: [wgpolicyk8s.io, openreports.io]
+        kinds: [PolicyReport, ClusterPolicyReport, Report, ClusterReport]
+        clusters: ["*"]
+      - apiGroups: [reports.kyverno.io]
+        kinds: [EphemeralReport, ClusterEphemeralReport]
+        clusters: ["*"]
+      - apiGroups: [kyverno.io]
+        kinds: [UpdateRequest]
+        clusters: ["*"]
     oidc.config: |
       name: Google
       issuer: https://accounts.google.com
@@ -63,6 +73,9 @@ notifications:
   enabled: false
 applicationSet:
   replicas: 0 # 차트에 enabled 플래그가 없어 0으로
+  resources: # 실행되지 않지만 정책(ephemeral-storage 필수)·혹시 켤 때 과금 기준을 위해 명시
+    requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 64Mi }
 
 # 리소스: requests = limits(메모리). 임시 스토리지는 Autopilot 기본 1Gi 과금 방지로 100Mi 명시
 controller:
@@ -130,7 +143,7 @@ extraObjects:
     stringData:
       name: in-cluster
       server: https://kubernetes.default.svc
-      namespaces: argocd,monitoring,atlantis,openbao
+      namespaces: argocd,monitoring,atlantis,openbao,lab-api,argo-rollouts,kyverno
       clusterResources: "true"
   # 기본: argocd 네임스페이스 모든 인바운드 차단
   - apiVersion: networking.k8s.io/v1

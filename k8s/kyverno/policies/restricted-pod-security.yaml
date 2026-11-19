@@ -1,0 +1,64 @@
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restricted-pod-security
+  annotations:
+    policies.kyverno.io/title: Pod Security restricted
+    policies.kyverno.io/category: 보안
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      PSS restricted 핵심 항목(비 root, seccomp RuntimeDefault, 권한 상승 금지, capabilities drop ALL, privileged·host 네임스페이스·hostPath·hostPort 금지)을 CI 에서 미리 검사. 네임스페이스 PSS 레이블과 같은 기준.
+spec:
+  validationActions: [Audit] # 클러스터는 정책 보고서만(차단 없음). CI 의 kyverno apply 는 위반이면 실패
+  evaluation:
+    background:
+      enabled: true
+  autogen: # 대상 종류를 아래에 직접 나열(Rollout 포함) → 자동 생성 끔
+    podControllers:
+      controllers: []
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [""], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [pods] }
+      - { apiGroups: [apps], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [deployments, statefulsets, daemonsets] }
+      - { apiGroups: [batch], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [jobs, cronjobs] }
+      - { apiGroups: [argoproj.io], apiVersions: [v1alpha1], operations: [CREATE, UPDATE], resources: [rollouts] }
+  matchConditions: # GKE 관리형 네임스페이스·helm test hook(Argo CD 가 실행하지 않음)은 제외
+    - name: not-helm-test-hook
+      expression: object.metadata.?annotations[?'helm.sh/hook'].orValue('') != 'test'
+    - name: not-managed-namespace
+      expression: >-
+        !(object.metadata.?namespace.orValue('') in ['kube-system', 'kube-public', 'kube-node-lease', 'gke-managed-system', 'gke-gmp-system', 'gmp-public', 'gke-managed-cim', 'gke-managed-filestorecsi'])
+  variables:
+    # 종류마다 파드 스펙 위치가 다름 (Rollout 은 Kyverno 자동 생성 대상이 아니라 직접 계산)
+    - name: podSpec
+      expression: >-
+        object.kind == 'Pod' ? object.spec :
+        object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec :
+        object.spec.template.spec
+    - name: containers
+      expression: variables.podSpec.containers + variables.podSpec.?initContainers.orValue([])
+  validations:
+    - expression: >-
+        variables.podSpec.?securityContext.?runAsNonRoot.orValue(false) == true ||
+        variables.containers.all(c, c.?securityContext.?runAsNonRoot.orValue(false) == true)
+      message: "runAsNonRoot: true 가 필요합니다 (파드 또는 모든 컨테이너)"
+    - expression: >-
+        variables.podSpec.?securityContext.?seccompProfile.?type.orValue('') in ['RuntimeDefault', 'Localhost'] ||
+        variables.containers.all(c, c.?securityContext.?seccompProfile.?type.orValue('') in ['RuntimeDefault', 'Localhost'])
+      message: "seccompProfile RuntimeDefault(또는 Localhost)가 필요합니다"
+    - expression: >-
+        variables.containers.all(c, c.?securityContext.?allowPrivilegeEscalation.orValue(true) == false)
+      messageExpression: >-
+        'allowPrivilegeEscalation: false 가 없는 컨테이너: ' + variables.containers.filter(c, c.?securityContext.?allowPrivilegeEscalation.orValue(true) != false).map(c, c.name).join(', ')
+    - expression: >-
+        variables.containers.all(c, 'ALL' in c.?securityContext.?capabilities.?drop.orValue([]) &&
+          c.?securityContext.?capabilities.?add.orValue([]).all(a, a == 'NET_BIND_SERVICE'))
+      messageExpression: >-
+        'capabilities drop ALL 이 없거나 허용 밖 add 가 있는 컨테이너: ' + variables.containers.filter(c, !('ALL' in c.?securityContext.?capabilities.?drop.orValue([]))
+          || !c.?securityContext.?capabilities.?add.orValue([]).all(a, a == 'NET_BIND_SERVICE')).map(c, c.name).join(', ')
+    - expression: >-
+        variables.containers.all(c, c.?securityContext.?privileged.orValue(false) == false) &&
+        !variables.podSpec.?hostNetwork.orValue(false) && !variables.podSpec.?hostPID.orValue(false) && !variables.podSpec.?hostIPC.orValue(false) &&
+        (!has(variables.podSpec.volumes) || variables.podSpec.volumes == null || variables.podSpec.volumes.all(v, !has(v.hostPath))) &&
+        variables.containers.all(c, !has(c.ports) || c.ports == null || c.ports.all(p, p.?hostPort.orValue(0) == 0))
+      message: "privileged·hostNetwork/PID/IPC·hostPath·hostPort 는 쓸 수 없습니다"

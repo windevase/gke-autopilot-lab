@@ -40,7 +40,7 @@ read -r state head author files <<<"$info"
 me=$("$GH" api user --jq .login)
 
 # 보호 경로 — policy-audit.sh 의 PROTECTED 와 같게 유지 (테스트가 일치 여부를 확인)
-PROTECTED='^(\.github/|\.claude/|tools/|CLAUDE\.md$|atlantis\.yaml$|_bootstrap/|k8s/atlantis/|k8s/apps/|k8s/argocd/|k8s/monitoring/offhours/|k8s/monitoring/budget-guard/)'
+PROTECTED='^(\.github/|\.forgejo/|\.claude/|tools/|CLAUDE\.md$|atlantis\.yaml$|_bootstrap/|k8s/atlantis/|k8s/apps/|k8s/argocd/|k8s/forgejo/|k8s/monitoring/offhours/|k8s/monitoring/budget-guard/)'
 
 # 유형: Atlantis 가 이 커밋을 plan 했으면 terraform (Atlantis 가 대상 여부를 판단 — 모듈·하위 폴더 변경 포함)
 # plan 이 없는데 terraform 코드가 바뀌었으면: 로컬 apply 계층(--local-tf)만 정책 PR 로, 아니면 거부

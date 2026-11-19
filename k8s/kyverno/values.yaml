@@ -1,0 +1,61 @@
+# Kyverno (정책 엔진) — Argo 앱 kyverno (k8s/apps/kyverno.yaml). 정책은 Argo 앱 kyverno-policies (k8s/kyverno/policies)
+# - 정책은 전부 Audit(정책 보고서만, 차단 없음). CI 의 kyverno apply 가 배포 전에 같은 정책으로 검사(위반이면 실패)
+# - CRD 는 Argo CD 가 다루지 않음 → crds.install false, 차트 버전을 올릴 때 CRD 만 수동:
+#     helm template kyverno kyverno/kyverno --version <버전> --set crds.install=true | (CRD 만 추출) | kubectl apply --server-side -f -
+# - 평일 10~20시만 가동(오프아워 Job 이 Argo CD 와 함께 켜고 끔). 꺼져 있는 동안 파드 생성이 막히지 않도록
+#   웹훅 실패 정책을 Ignore 로 강제(features.forceFailurePolicyIgnore) — Audit 전용이라 차단 기능은 원래 필요 없음
+# - GKE 관리형 네임스페이스는 웹훅에서 제외(Autopilot Warden 이 관리, 수정 불가)
+crds:
+  install: false
+  migration: # 업그레이드 후 CRD 저장 버전 이전 hook Job — CRD 를 수동 관리하므로 그 절차에 포함(차트 버전을 올릴 때)
+    enabled: false
+
+upgrade:
+  legacyPolicyCheck: # 옛 kyverno.io 정책(ClusterPolicy 등) 점검 hook Job — 처음부터 ValidatingPolicy 만 써서 대상 없음
+    enabled: false
+
+config:
+  webhooks:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kube-public, kube-node-lease, gke-managed-system, gke-gmp-system, gmp-public, gke-managed-cim, gke-managed-filestorecsi]
+
+features:
+  forceFailurePolicyIgnore:
+    enabled: true
+
+webhooksCleanup:
+  enabled: false # helm pre-delete 훅 Job — Argo 로 관리하므로 불필요
+
+admissionController:
+  replicas: 1
+  nodeSelector: { cloud.google.com/gke-spot: "true" }
+  initContainer:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 100Mi }
+      limits: { memory: 64Mi }
+  container:
+    resources:
+      requests: { cpu: 50m, memory: 256Mi, ephemeral-storage: 100Mi }
+      limits: { memory: 256Mi }
+
+backgroundController: # 기존 리소스 주기 점검(background) → 정책 보고서
+  enabled: true
+  replicas: 1
+  nodeSelector: { cloud.google.com/gke-spot: "true" }
+  resources:
+    requests: { cpu: 50m, memory: 128Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 128Mi }
+
+reportsController: # 정책 보고서(PolicyReport) 집계
+  enabled: true
+  replicas: 1
+  nodeSelector: { cloud.google.com/gke-spot: "true" }
+  resources:
+    requests: { cpu: 50m, memory: 128Mi, ephemeral-storage: 100Mi }
+    limits: { memory: 128Mi }
+
+cleanupController: # 정리 정책(CleanupPolicy) 안 씀
+  enabled: false

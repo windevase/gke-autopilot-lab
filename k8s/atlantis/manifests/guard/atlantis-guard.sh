@@ -101,7 +101,7 @@ if ((gh_ok)); then
 
   # 보호 경로가 섞인 PR 은 apply 하지 않는다 — apply 후 automerge 로 정책 변경이 terraform 승인에 묻어 들어가는 것 방지
   # policy-audit.sh 의 PROTECTED 와 같게 유지
-  protected='^(\.github/|\.claude/|tools/|CLAUDE\.md$|atlantis\.yaml$|_bootstrap/|k8s/atlantis/|k8s/apps/|k8s/argocd/|k8s/monitoring/offhours/|k8s/monitoring/budget-guard/)'
+  protected='^(\.github/|\.forgejo/|\.claude/|tools/|CLAUDE\.md$|atlantis\.yaml$|_bootstrap/|k8s/atlantis/|k8s/apps/|k8s/argocd/|k8s/forgejo/|k8s/monitoring/offhours/|k8s/monitoring/budget-guard/)'
   if files=$(gh_get "pulls/${PULL_NUM}/files?per_page=100" | jq -r '.[].filename'); then
     mixed=$(grep -E "$protected" <<<"$files" || true)
     if [[ -n $mixed ]]; then

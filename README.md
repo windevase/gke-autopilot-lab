@@ -8,8 +8,9 @@ Cloudflare Tunnel로 외부에 공개한 포트폴리오용 실습 환경입니�
 클라우드 리소스 변경(이 저장소의 `platform/` 계층, 별도 저장소의 AWS 프로젝트)은 클러스터 안의 **Atlantis**가 PR 단위로 plan·apply합니다.
 사람은 채팅으로만 승인하고, AI 에이전트가 PR 작성·보고·승인 기록을 맡으며, 감시·사후 감사가 그 과정을 강제합니다 ([Terraform CI/CD](#terraform-cicd-atlantis--채팅-승인)).
 역할을 붙일 수 없는 서버(온프레미스 등)와 담당자 PC 는 **OpenBao**에서 AWS 임시 자격을 받아 **액세스 키 없이** 동작합니다 ([임시 자격 발급](#임시-자격-발급-openbao)).
+샘플 서비스 **lab-api** 로 서명된 이미지 → **정책 검사(Kyverno, CI 차단 + 클러스터 보고서)** → SLO·에러 버짓 → SLO 소진 속도로 판정하는 canary 배포·자동 롤백까지 SRE 흐름을 보여 줍니다 ([SRE 사례](#sre-사례--lab-api-공급망--slo--canary)).
 
-**목표:** 운영 품질(보안·관측성·자동화)은 지키면서 비용은 최소로 유지합니다. 예상 비용은 **월 약 $5.3**입니다 (Prometheus 이중화 + Thanos, Argo CD, Atlantis, OpenBao 포함).
+**목표:** 운영 품질(보안·관측성·자동화)은 지키면서 비용은 최소로 유지합니다. 예상 비용은 **월 약 $7.8**입니다 (Prometheus 이중화 + Thanos, Argo CD, Atlantis, OpenBao, lab-api·Argo Rollouts·Kyverno 포함).
 
 > **저장소 구성:** 운영은 private 저장소에서 하고, 공개 저장소 [gke-autopilot-lab](https://github.com/windevase/gke-autopilot-lab)에는 검사를 통과한 **스냅샷**만 올립니다.
 > 공개본에서는 계정 식별 정보(프로젝트 ID·도메인·계정 ID 등)를 `my-gcp-project`, `example.com` 같은 예시 값으로 바꾸고,
@@ -87,6 +88,8 @@ flowchart LR
 | Terraform CI/CD | **Atlantis**(클러스터 안, 필요할 때만): PR 단위 plan → 채팅 승인 → apply → 자동 merge. 이 저장소 `platform/` + 별도 AWS 저장소 |
 | 임시 자격 발급 | **OpenBao**(클러스터 안, 필요할 때만): 역할 없는 서버는 AppRole(IP 고정), 담당자는 OIDC 로그인 → AWS STS 15분~1시간. OpenBao 자신도 키 없음(IRSA) |
 | 변경 통제 | 무료 GitHub(브랜치 보호 없음)를 규칙으로 보완: 채팅 승인 기록 · 서버 측 감시 · main 사후 감사 · 저장소 간 교차 감사 · AI 거부 목록 |
+| SRE 사례 | 샘플 서비스 lab-api(Go): 이미지 공급망(Trivy·SBOM·cosign 서명) → SLO(Sloth, 7일 다중 창 burn rate) → **Argo Rollouts canary**(canary 파드만의 SLO 소진 속도로 자동 롤백) |
+| 정책 (Policy as Code) | **Kyverno** 1.20 `ValidatingPolicy`(CEL) 4개 + `ImageValidatingPolicy`(cosign 서명): CI 에서 저장소 매니페스트·Helm 차트 렌더링을 검사(위반이면 실패), 클러스터에서는 Audit(정책 보고서) |
 | CI · 버전 관리 | GitHub Actions: Terraform fmt/validate, kubeconform(Helm 렌더링 포함), gitleaks, 대시보드·스크립트 검사. Renovate·Dependabot이 업데이트 PR 생성 |
 
 ### 대시보드
@@ -103,6 +106,7 @@ flowchart LR
 | **Argo CD (GitOps)** | Prometheus | 앱별 Sync/Health 현재 상태·타임라인, 동기화 횟수·결과·소요 시간, reconcile 시간, 컨트롤러 캐시 객체 수(메모리와 직결), Git 요청, 리소스·재시작·OOM |
 | **Terraform CI/CD** | Prometheus + GitHub | 사후·교차 감사 마지막 결과, Atlantis 가동 시간·비용(7일), plan·apply 실행 결과(24시간), PR 리드타임, 워크플로 결과, 정책 위반 이슈 |
 | **GitHub 사용량** | GitHub REST (Infinity) | GitHub Free 무료 한도 대비 Actions 분(Linux 환산)·저장 공간(GB-시간)·월말 예상·청구 예정, 캐시, API 요청 한도 |
+| **SLO (lab-api 에러 버짓)** | Prometheus | SLO별 7일 SLI·남은 에러 버짓·현재/기간 소진 속도·경보 상태, 창별(5m·1h·6h·1d) 소진 속도, RED(요청·오류율·p50/95/99), canary 파드 템플릿별 요청·소진 속도 |
 | **OpenBao (임시 자격 발급)** | Prometheus | 봉인 상태·가동 시간, 인증 방식별 로그인(AppRole·OIDC)·AppRole 로그인 실패(추정), AWS STS 발급·살아 있는 자격, 경로별 요청·처리 시간, 감사 로그 실패, Raft·리소스 (필요할 때만 가동 → 꺼진 시간은 비어 있음) |
 
 ## Dashboard as Code
@@ -241,6 +245,55 @@ OpenBao 는 **역할을 붙일 수 없는 곳**(온프레미스 서버, 담당�
 | 권한 | 서버용 AppRole 은 필요한 권한만(시범: S3 읽기), 관리자 STS 는 사람 OIDC 로그인에만. 루트 토큰은 초기 설정 후 폐기 |
 | 검증 | 키 없이 STS 발급·호출, 권한 밖 동작 거부, 래핑 토큰 재사용 거부, 다른 주소에서 AppRole 로그인 거부, `aws` 10회 → 발급 1회(캐시) |
 
+## SRE 사례 — lab-api (공급망 → SLO → canary)
+
+작은 Go 서비스 하나로 **"서명된 이미지만 배포하고, SLO 로 신뢰성을 정의하고, 새 버전이 에러 버짓을 태우면 자동으로 되돌린다"** 를 끝까지 구현했습니다.
+
+```
+코드 push ─▶ CI: test → 빌드 → Trivy 스캔 → SBOM → cosign 서명·SBOM 증명 (main 만 push)
+                                                           │ 서명된 digest
+                                                           ▼
+        Git PR (digest 교체) ─▶ Argo CD ─▶ Argo Rollouts canary: stable 2 + canary 1 (트래픽 ≈ 1/3)
+                                                           │ 1분마다
+                                     AnalysisTemplate: canary 파드만의 SLO 소진 속도 (Prometheus)
+                                          ├─ < 14.4배 (page 기준) → 6분 후 전체 교체
+                                          └─ ≥ 14.4배 또는 판정 불가 → 즉시 중단 = 자동 롤백
+```
+
+| 영역 | 구성 |
+|---|---|
+| 서비스 | `app/lab-api` (Go 1.26): `/api/items`(SLO 대상), 요청 수·지연 히스토그램(SLO 경계 300ms 버킷), 장애 주입 환경 변수, SIGTERM 때 readiness 먼저 내리고 종료. 같은 이미지의 `loadgen` 모드가 초당 2건 상시 트래픽 |
+| 이미지 공급망 | distroless(nonroot)·베이스 digest 고정. CI 가 Trivy(HIGH·CRITICAL 수정판 있으면 실패)·CycloneDX SBOM·**cosign 키 서명 + SBOM 증명**. 투명성 로그 없는 signing config(private 저장소 정보가 공개 로그에 남지 않음). 도구는 액션 대신 체크섬 확인 바이너리. 매니페스트는 **태그가 아닌 서명된 digest** 만 |
+| SLO | Sloth 원본 `slo/lab-api.yaml` → PrometheusRule 생성(CI 가 일치 검사). 가용성 99.5%·지연(300ms) 99%, 기간 **7일**(Prometheus 보관 기간 — 30일 대신 SRE 워크북 다중 창 14.4·6·3·1배를 7일로 환산한 창 정의). 경보는 Prometheus 안에서 상태만(알림 없음) |
+| 정책 | Kyverno — ephemeral-storage 필수(Autopilot 1Gi 과금 방지)·이미지 고정(latest 금지)·PSS restricted·Spot 노드(예외는 근거와 함께) + lab-api 이미지 **cosign 서명 검증**. 같은 정책 파일로 **CI(배포 전 차단)** 와 **클러스터(배포 후 보고서, Audit)** 두 단계. 처음 적용에서 실제 위반 3건(Atlantis init 컨테이너 임시 스토리지 1Gi 과금 등)을 찾아 수정 |
+| canary | Argo Rollouts(평일 10~20시, Argo CD 와 같이). canary 파드 템플릿 레이블로 **canary 만의** 가용성·지연 소진 속도 + canary 트래픽 최소량을 분석, **판정 불가도 실패(fail-safe)**. Deployment → Rollout 전환은 PruneLast 로 무중단(실패 요청 0) |
+
+### 검증 결과
+| 시나리오 | 결과 |
+|---|---|
+| 정상 버전 canary | canary 트래픽 초당 0.9~1.0건, 소진 속도 0 → 6분 관찰 후 전체 교체 |
+| 장애 주입(5xx 30%) canary | 2분 뒤 가용성 소진 속도 **59.8배** 측정 → `RolloutAborted` → canary 제거, stable 2대로 서비스 계속 |
+| 정책 검사 | CI: 매니페스트 + 차트 6개 렌더링 통과 91·위반 0 / 클러스터: 정책 보고서 89개 위반 0, lab-api 파드 서명 검증 통과 |
+| 서명 검증 | 공개키만으로 누구나: `cosign verify --key app/lab-api/cosign.pub --insecure-ignore-tlog ghcr.io/windevase/lab-api@<digest>` |
+
+### 사고 회고 — 첫 시연에서 자동 롤백이 동작하지 않음
+**영향**: 장애 주입 버전이 전체 배포되어 약 13분간 `/api/items` 의 약 30% 가 500 (실습 서비스, 실사용자 없음). 7일 가용성 에러 버짓 초과.
+
+| 시각 | 내용 |
+|---|---|
+| 21:34 | 장애 주입 PR merge → canary 시작 |
+| 21:40 | 분석 측정값 4회 모두 **0** → "통과" → 장애 버전 전체 배포 |
+| 21:44 | 확인 — AnalysisRun 측정값이 0 인 것에서 canary 가 요청을 전혀 받지 못했음을 파악 |
+| 21:47 | 원복 PR merge (분석은 그대로 두어 복구 배포를 막지 않음) |
+| 21:53 | 복구, 5xx 0 |
+
+| 원인 | 조치 |
+|---|---|
+| 트래픽 생성기(Go `http.Client`)가 keep-alive 로 연결을 재사용 → Service 는 **연결 단위**로 분산하므로 모든 요청이 한 파드로 → canary 요청 0 | 요청마다 새 연결(`DisableKeepAlives`) |
+| 분석이 "데이터 없음"을 0(통과)으로 계산 — **판정 불가를 정상으로 취급** | fail-safe: 결과가 없으면 실패 + canary 트래픽 최소량(초당 0.2건) 지표 추가 |
+
+**배운 점**: 자동 판정은 "나쁨을 감지하는가" 만큼 **"판정할 근거가 있는가"** 를 먼저 확인해야 합니다. 정상 canary·장애 canary 두 시나리오를 모두 재실행해 검증했습니다.
+
 ## Prometheus 고가용성 (HA pair + Thanos)
 
 Spot Pod는 언제든 회수될 수 있어, Prometheus가 1대면 회수·재시작 동안(보통 2~5분) 지표가 비었습니다.
@@ -284,8 +337,11 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
 | CronJob (budget-guard 매시간, 백업 주 1회, 자가 점검 월 1회, 오프아워) | 약 $0.05 |
 | Atlantis (켜 둔 시간만, 비 Spot 250m/1Gi ≈ $0.016/h) + PVC 2Gi | 약 $0.1~0.3 |
 | OpenBao (켜 둔 시간만, Spot 50m/256Mi) + PVC 1Gi | 약 $0.05~0.1 |
+| lab-api 2대 + 트래픽 생성기 1대 (24시간, Spot 50m/64Mi × 3) | 약 $1.65 |
+| Argo Rollouts 컨트롤러 (평일 10시간, Spot 50m/128Mi) | 약 $0.2 |
+| Kyverno 3개 컨트롤러 (평일 10시간, Spot 50m/256Mi + 50m/128Mi × 2) | 약 $0.6 |
 | PV, 로깅, BigQuery, Pub/Sub, GCS 백업, Cloudflare | 약 $0 (무료 등급) |
-| **합계** | **약 $5.3** |
+| **합계** | **약 $7.8** |
 
 ## 보안
 
@@ -346,6 +402,9 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
 ├─ backend.hcl.example               # state 버킷 예시 → backend.hcl 로 복사 (Git 제외)
 ├─ tf.ps1                            # Terraform 래퍼 (Cloudflare 토큰 주입, init 시 backend.hcl 사용)
 ├─ .github/workflows/ci.yml          # 정적 검증 CI
+├─ .github/workflows/lab-api.yml     # lab-api 이미지 공급망: test → 빌드 → Trivy → SBOM → cosign 서명·증명 → 검증
+├─ app/lab-api/                     # 샘플 서비스(Go) + Dockerfile(distroless) + cosign 공개키·signing config
+├─ slo/                             # SLO 원본(Sloth) + 7일 기간 창 정의 → k8s/lab-api/slo-rules.yaml 생성
 ├─ .github/workflows/apply-on-approve.yml, policy-audit.yml  # 승인 후 apply·merge, main 사후 감사·교차 감사 (공개본 제외)
 ├─ .github/scripts/policy-audit.sh   # 사후 감사 스크립트 (보호 경로 변경의 승인 기록 확인)
 ├─ renovate.json                     # 차트·이미지 버전 업데이트 PR (Actions는 Dependabot)
@@ -366,13 +425,16 @@ Prometheus에는 클러스터링 기능이 없으므로, 표준 패턴인 **같�
    ├─ argocd/              # Argo CD values + install.ps1 (Argo CD 자신은 Helm으로 부트스트랩)
    ├─ apps/                # App of Apps: root + 컴포넌트별 Application
    ├─ atlantis/            # Atlantis values(서버 측 정책·workflow), 감시 스크립트·AWS 프로필 ConfigMap, NetworkPolicy
+   ├─ lab-api/             # Rollout(canary)·AnalysisTemplate(SLO 소진 속도)·SLO 규칙(생성물)·트래픽 생성기·NetworkPolicy
+   ├─ argo-rollouts/       # Argo Rollouts 컨트롤러 values (CRD 는 수동)
+   ├─ kyverno/             # Kyverno values(Audit·웹훅 Ignore·평일만) + policies/(CEL 정책 4개 + 이미지 서명 검증, CI 와 공용)
    ├─ openbao/             # OpenBao values(static seal·AWS 플러그인 digest·감사 선언·IRSA·NetworkPolicy)
    └─ monitoring/
       ├─ kps/              # kube-prometheus-stack values (설계 근거는 주석에), 부트스트랩용 deploy.ps1
       ├─ cloudflared/      # 터널 커넥터 (라우팅 ConfigMap + Deployment + PodMonitor)
       ├─ budget-guard/     # 예산 초과 자동 차단 + 월간 자가 점검
       ├─ backup/           # Grafana DB 주간 백업
-      ├─ offhours/         # 평일 10~20시만 가동 (Grafana·cloudflared·Argo CD) + Atlantis·OpenBao 20:00 종료
+      ├─ offhours/         # 평일 10~20시만 가동 (Grafana·cloudflared·Argo CD) + Argo Rollouts·Kyverno, Atlantis·OpenBao 20:00 종료
       ├─ platform/         # StorageClass, NetworkPolicy
       └─ dashboards/       # 대시보드 생성기(gen_*.py, 공통 _dashlib.py) → JSON → ConfigMap
 ```
@@ -434,9 +496,11 @@ python tools\waf-atlantis.py      # Atlantis 호스트 WAF 규칙
 | 비밀값 | gitleaks로 전체 커밋 기록 스캔 |
 | Terraform 사전 검사 | Atlantis plan 첫 단계와 같은 검사(base 버전 스크립트) |
 | 사본 동기화 | 감시·승인 스크립트가 원본(AWS 저장소)과 같은지 — 다르면 실패 |
-| 기타 | 대시보드 JSON 유효성, 생성기 7종 결과 = 커밋된 JSON, ConfigMap = JSON, budget-guard 스크립트 문법 |
+| 기타 | 대시보드 JSON 유효성, 생성기 결과 = 커밋된 JSON, ConfigMap = JSON, **SLO 원본 = 생성된 PrometheusRule(Sloth)**, budget-guard 스크립트 문법 |
+| 정책 (`policy`) | Kyverno CLI 로 저장소 매니페스트 + 클러스터에 올라가는 Helm 차트 렌더링 검사 — 위반·오류면 실패 |
+| 이미지 공급망 (`lab-api`) | gofmt·vet·test(-race), Trivy 취약점 스캔, CycloneDX SBOM, main 에서 cosign 서명·SBOM 증명 후 즉시 검증 |
 | 사후 감사 | main push 마다 보호 경로 변경의 승인 기록 확인, 매일 상대 저장소 교차 감사 (`policy-audit`) |
-| 의존성 | Renovate(Helm 차트·컨테이너 이미지)와 Dependabot(GitHub Actions)이 버전 업데이트 PR을 매주 생성 |
+| 의존성 | Renovate(Helm 차트·컨테이너 이미지·Go 모듈·Dockerfile·CI 도구 바이너리)와 Dependabot(GitHub Actions)이 버전 업데이트 PR을 매주 생성 |
 
 ## 트러블슈팅 기록
 

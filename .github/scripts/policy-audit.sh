@@ -20,7 +20,7 @@ set -uo pipefail
 
 BOT=${AUDIT_BOT:-windevase-atlantis[bot]}
 # gcp: k8s/apps/(Argo 앱 정의 — main 에 들어오면 무엇이든 자동 배포)·k8s/argocd/(권한)·budget-guard(예산 차단 장치)도 보호 (2026-11-14)
-PROTECTED='^(\.github/|\.claude/|tools/|CLAUDE\.md$|atlantis\.yaml$|_bootstrap/|k8s/atlantis/|k8s/apps/|k8s/argocd/|k8s/monitoring/offhours/|k8s/monitoring/budget-guard/)'
+PROTECTED='^(\.github/|\.forgejo/|\.claude/|tools/|CLAUDE\.md$|atlantis\.yaml$|_bootstrap/|k8s/atlantis/|k8s/apps/|k8s/argocd/|k8s/forgejo/|k8s/monitoring/offhours/|k8s/monitoring/budget-guard/)'
 AUDIT_FILES=(.github/scripts/policy-audit.sh .github/workflows/policy-audit.yml)
 # 규칙 시행 시점(infra-terraform#18 merge, 2026-11-14 02:35 KST) — 그 전 변경은 교차 감사하지 않는다
 RULE_START='2026-11-13T17:30:00Z'
