@@ -12,7 +12,9 @@
 #   1. HEAD(= origin/main, 작업 트리 깨끗해야 함)를 git archive 로 추출 — 추적 파일만 (secret/·tfvars 는 원래 제외)
 #   2. 공개본에서 동작할 수 없는 것 제거: private 토큰이 필요한 워크플로(apply-on-approve, policy-audit),
 #      ci.yml 의 사본 동기화 job, Dependabot 설정(공개 저장소에 PR 을 만들지 않도록), 로컬 작업 환경 설정(.claude/)
-#   3. 치환: REDACT 규칙 + tfvars 의 계정·존·결제 ID 자동 추가. 도메인·GitHub 사용자명은 공개(사용자 결정)
+#   3. 치환: REDACT 규칙 + tfvars 의 계정·존·결제 ID 자동 추가. 도메인은 숨김, GitHub 사용자명은 공개(사용자 결정)
+#      예외: README.md 의 Grafana 공개 대시보드 링크(https://grafana.<도메인>/public-dashboards/<토큰>)는 그대로 둔다
+#      (2026-11-20 사용자 결정 — 포트폴리오에서 바로 볼 수 있게. 다른 위치의 도메인은 계속 치환·검사)
 #   4. 검사: 치환 대상 원래 값 잔존 0, 비밀값 패턴(PRIVATE KEY·ghp_·glsa_·GOCSPX-·cfat_ 등) 0,
 #      개인 메일 주소(gmail·naver 등) 0. 하나라도 걸리면 중단
 set -euo pipefail
@@ -71,6 +73,7 @@ for tf in tfvars:
 SECRET_PATTERNS = [r"-----BEGIN [A-Z ]*PRIVATE KEY", r"\bghp_[A-Za-z0-9]{20,}", r"\bgithub_pat_[A-Za-z0-9_]{20,}",
                    r"\bglsa_[A-Za-z0-9_]{20,}", r"GOCSPX-[A-Za-z0-9_-]{10,}", r"\bcfat_[A-Za-z0-9]{20,}",
                    r"\bAKIA[0-9A-Z]{16}\b", r'"private_key"\s*:']
+KEEP = re.compile(r"https://grafana\.[A-Za-z0-9.-]+/public-dashboards/[0-9a-f]{32}")
 MAIL = re.compile(r"[A-Za-z0-9._%+-]+@(?:gmail|naver|daum|hanmail|kakao|outlook|hotmail|yahoo)\.[a-z.]+", re.I)
 
 changed, problems = 0, []
@@ -81,13 +84,13 @@ for dp, _, files in os.walk(out):
             s = open(p, encoding="utf-8").read()
         except UnicodeDecodeError:
             continue  # 바이너리
-        t = s
+        rel = os.path.relpath(p, out)
+        keep = []
+        def _mask(m):
+            keep.append(m.group(0)); return f"@@KEEP{len(keep) - 1}@@"
+        t = KEEP.sub(_mask, s) if rel == "README.md" else s
         for pat, rep in rules:
             t = re.sub(pat, rep, t)
-        if t != s:
-            open(p, "w", encoding="utf-8", newline="").write(t)
-            changed += 1
-        rel = os.path.relpath(p, out)
         for pat, _ in rules:
             if re.search(pat, t):
                 problems.append(f"치환 후 잔존: {rel} ~ /{pat}/")
@@ -96,6 +99,11 @@ for dp, _, files in os.walk(out):
                 problems.append(f"비밀값 패턴: {rel} ~ /{pat}/")
         for m in MAIL.finditer(t):
             problems.append(f"개인 메일: {rel} ~ {m.group(0)}")
+        # 검사는 예외 링크를 가린 상태로 끝낸 뒤 되돌린다
+        t = re.sub(r"@@KEEP(\d+)@@", lambda m: keep[int(m.group(1))], t)
+        if t != s:
+            open(p, "w", encoding="utf-8", newline="").write(t)
+            changed += 1
 print(f"치환 규칙 {len(rules)}개, 치환된 파일 {changed}개")
 if problems:
     print("\n".join(problems)); sys.exit(1)

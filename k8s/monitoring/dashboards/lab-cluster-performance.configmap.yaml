@@ -21,36 +21,7 @@ data:
         "to": "now"
       },
       "templating": {
-        "list": [
-          {
-            "name": "namespace",
-            "label": "네임스페이스",
-            "type": "query",
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "query": {
-              "query": "label_values(kube_pod_info, namespace)",
-              "refId": "ns"
-            },
-            "definition": "label_values(kube_pod_info, namespace)",
-            "refresh": 2,
-            "multi": true,
-            "includeAll": true,
-            "allValue": ".*",
-            "current": {
-              "selected": true,
-              "text": [
-                "monitoring"
-              ],
-              "value": [
-                "monitoring"
-              ]
-            },
-            "sort": 1
-          }
-        ]
+        "list": []
       },
       "annotations": {
         "list": []
@@ -1013,7 +984,7 @@ data:
         },
         {
           "type": "row",
-          "title": "워크로드 ($namespace)",
+          "title": "워크로드 (monitoring)",
           "id": 16,
           "collapsed": false,
           "gridPos": {
@@ -1081,7 +1052,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{container!=\"\", namespace=~\"$namespace\"}[5m])) * 1000",
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{container!=\"\", namespace=\"monitoring\"}[5m])) * 1000",
               "legendFormat": "{{pod}}",
               "refId": "A",
               "range": true,
@@ -1146,7 +1117,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (pod) (container_memory_working_set_bytes{container!=\"\", namespace=~\"$namespace\"})",
+              "expr": "sum by (pod) (container_memory_working_set_bytes{container!=\"\", namespace=\"monitoring\"})",
               "legendFormat": "{{pod}}",
               "refId": "A",
               "range": true,
@@ -1211,7 +1182,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{container!=\"\", namespace=~\"$namespace\"}[5m])) / sum by (pod) (rate(container_cpu_cfs_periods_total{container!=\"\", namespace=~\"$namespace\"}[5m]))",
+              "expr": "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{container!=\"\", namespace=\"monitoring\"}[5m])) / sum by (pod) (rate(container_cpu_cfs_periods_total{container!=\"\", namespace=\"monitoring\"}[5m]))",
               "legendFormat": "{{pod}}",
               "refId": "A",
               "range": true,
@@ -1275,7 +1246,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (pod) (rate(container_network_receive_bytes_total{namespace=~\"$namespace\"}[5m]))",
+              "expr": "sum by (pod) (rate(container_network_receive_bytes_total{namespace=\"monitoring\"}[5m]))",
               "legendFormat": "{{pod}} 수신",
               "refId": "A",
               "range": true,
@@ -1286,7 +1257,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "-sum by (pod) (rate(container_network_transmit_bytes_total{namespace=~\"$namespace\"}[5m]))",
+              "expr": "-sum by (pod) (rate(container_network_transmit_bytes_total{namespace=\"monitoring\"}[5m]))",
               "legendFormat": "{{pod}} 송신",
               "refId": "B",
               "range": true,
@@ -1350,7 +1321,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (pod) (rate(container_fs_reads_bytes_total{container!=\"\", namespace=~\"$namespace\"}[5m]))",
+              "expr": "sum by (pod) (rate(container_fs_reads_bytes_total{container!=\"\", namespace=\"monitoring\"}[5m]))",
               "legendFormat": "{{pod}} 읽기",
               "refId": "A",
               "range": true,
@@ -1361,7 +1332,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "-sum by (pod) (rate(container_fs_writes_bytes_total{container!=\"\", namespace=~\"$namespace\"}[5m]))",
+              "expr": "-sum by (pod) (rate(container_fs_writes_bytes_total{container!=\"\", namespace=\"monitoring\"}[5m]))",
               "legendFormat": "{{pod}} 쓰기",
               "refId": "B",
               "range": true,
@@ -1427,7 +1398,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "max by (namespace, pod, node) (kube_pod_info{namespace=~\"$namespace\"}) * on (namespace, pod) group_left () (max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\"}) == 1)",
+              "expr": "max by (namespace, pod, node) (kube_pod_info{namespace=\"monitoring\"}) * on (namespace, pod) group_left () (max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\"}) == 1)",
               "legendFormat": "",
               "refId": "A",
               "range": false,
@@ -1439,7 +1410,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "time() - max by (namespace, pod) (kube_pod_start_time{namespace=~\"$namespace\"})",
+              "expr": "time() - max by (namespace, pod) (kube_pod_start_time{namespace=\"monitoring\"})",
               "legendFormat": "",
               "refId": "B",
               "range": false,
@@ -1451,7 +1422,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"}))",
+              "expr": "sum by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_status_restarts_total{namespace=\"monitoring\"}))",
               "legendFormat": "",
               "refId": "C",
               "range": false,
@@ -1463,7 +1434,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\", namespace=~\"$namespace\"}[5m])) * 1000",
+              "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\", namespace=\"monitoring\"}[5m])) * 1000",
               "legendFormat": "",
               "refId": "D",
               "range": false,
@@ -1475,7 +1446,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\", namespace=~\"$namespace\"})",
+              "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\", namespace=\"monitoring\"})",
               "legendFormat": "",
               "refId": "E",
               "range": false,

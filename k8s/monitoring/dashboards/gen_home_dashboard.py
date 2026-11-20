@@ -1,14 +1,12 @@
 """Lab · 홈 (요약) 대시보드 생성기 — 포트폴리오 첫 화면.
 사용: python gen_home_dashboard.py lab-home.json
-4개 대시보드의 핵심 숫자 + 바로가기. 상세 계산은 각 대시보드와 동일한 쿼리 사용
+핵심 숫자 + 바로가기 (공개 대시보드 — BigQuery 쿼리 없음). 상세 계산은 각 대시보드와 동일한 쿼리 사용
 """
 import sys
-from _dashlib import (BILL_CRED as CRED, BILL_ELAPSED as ELAPSED, BILL_FREE as FREE, BILL_MONTH as MONTH,
-                      BILL_T as T, BQ, GITOPS_BAD, MEM_RATIO, MEM_STEPS, OOM_24H, OOM_DESC, PROM, bargauge, value_map, TUNNEL_5XX, TUNNEL_RPM, TUNNEL_5XX_DESC, Dashboard, base, bq, gauge, prom,
+from _dashlib import (GITOPS_BAD, MEM_RATIO, MEM_STEPS, OOM_24H, OOM_DESC, PROM, bargauge, value_map, TUNNEL_5XX, TUNNEL_RPM, TUNNEL_5XX_DESC, Dashboard, base, prom,
                       stat, text, write)
 
 NS = 'namespace="monitoring"'
-KRW = "currencyKRW"
 d = Dashboard()
 
 INTRO = """\
@@ -16,43 +14,34 @@ INTRO = """\
 월 **$10 크레딧 안에서** 운영하는 GKE Autopilot(Spot Pod) + kube-prometheus-stack 실습 환경입니다.
 Terraform(GCP·Cloudflare·AWS) · Helm · Cloudflare Tunnel · 예산 초과 자동 차단 · GitHub Actions CI · Argo CD · **Atlantis(채팅 승인 terraform CI/CD)**
 
+<!-- 링크: 공개 대시보드(로그인 없이 보기)는 /public-dashboards/<토큰>, 🔒 표시는 Grafana 로그인 필요 -->
 | 대시보드 | 내용 |
 |---|---|
-| [💰 실제 청구액](/d/lab-billing) | BigQuery 결제 데이터: 사용액·크레딧·월말 예상, 추정 vs 실제 |
-| [📊 비용 & 용량](/d/lab-cost-capacity) | 파드 requests 기반 비용 추정, rightsizing |
-| [⚙️ 클러스터 성능](/d/lab-cluster-performance) | 노드·워크로드·PV·API 서버·Prometheus |
-| [🛠️ 운영 & 외부 접속](/d/lab-ops) | 가동 타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |
-| [🚀 Argo CD (GitOps)](/d/lab-argocd) | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |
-| [🔐 OpenBao (임시 자격 발급)](/d/lab-openbao) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동) |
-| [🎯 SLO (lab-api 에러 버짓)](/d/lab-slo) | 가용성·지연 SLO, 다중 창 소진 속도, canary 배포 파드 템플릿별 비교 |
-| [🛡️ Kyverno 정책 결과](/d/lab-kyverno) | 정책별 통과·위반, 위반 목록, 검사 범위 (CI 차단 + 클러스터 Audit) |
-| [🏗️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 |
-| [🐙 GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 |
+| [💰 실제 청구액](/d/lab-billing) | BigQuery 결제 데이터: 사용액·크레딧·월말 예상, 추정 vs 실제 · 🔒 로그인 필요 |
+| [📊 비용 & 용량](/public-dashboards/a09908b0e38f47fbb648488e237b75aa) | 파드 requests 기반 비용 추정, rightsizing |
+| [⚙️ 클러스터 성능](/public-dashboards/ac65828bd89148c59bcaf118c369036f) | 노드·워크로드·PV·API 서버·Prometheus |
+| [🛠️ 운영 & 외부 접속](/public-dashboards/3a0bd1a4324948549c4dd22914ea98b7) | 가동 타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |
+| [🚀 Argo CD (GitOps)](/public-dashboards/9e7ef30208b0421fa75d746d4dac9b15) | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |
+| [🔐 OpenBao (임시 자격 발급)](/public-dashboards/0b2da8aeef8a41db9f8d37669b224300) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동) |
+| [🎯 SLO (lab-api 에러 버짓)](/public-dashboards/046c7b20304446bd81f9d34d062ad35b) | 가용성·지연 SLO, 다중 창 소진 속도, canary 배포 파드 템플릿별 비교 |
+| [🛡️ Kyverno 정책 결과](/public-dashboards/d573f5f583d84b8e8480259011de3ffe) | 정책별 통과·위반, 위반 목록, 검사 범위 (CI 차단 + 클러스터 Audit) |
+| [🏗️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 · 🔒 로그인 필요 |
+| [🐙 GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 · 🔒 로그인 필요 |
 """
 d.add(text("", INTRO, 0, d.y, w=24, h=12))
 d.y += 12
 
 # ---------------- 비용 ----------------
-d.row("비용 (이번 달)")
-d.add(stat(BQ, "순 청구액", [bq(f"SELECT IFNULL(ROUND(SUM(cost) + SUM({CRED})), 0) AS value FROM {T} WHERE {MONTH}")],
-           0, d.y, w=5, unit=KRW, decimals=0, graph=False, steps=[("green", None), ("orange", 1), ("red", 5000)],
-           desc="크레딧 차감 후 실제 결제될 금액 (결제 데이터는 1~2일 지연)"))
-d.add(gauge(BQ, "예산 대비 (₩$budget_krw)", [bq(
-    f"SELECT IFNULL(SAFE_DIVIDE(SUM(cost) + SUM({FREE}), $budget_krw), 0) AS value FROM {T} WHERE {MONTH}")],
-    5, d.y, w=5, steps=[("green", None), ("orange", 0.5), ("red", 0.9)],
-    desc="100%면 budget-guard가 워크로드를 자동으로 0으로 내림"))
-d.add(stat(BQ, "월말 예상 (할인 전, USD)", [bq(
-    f"SELECT IFNULL(ROUND(SAFE_DIVIDE(SUM(cost / currency_conversion_rate), {ELAPSED}), 2), 0) AS value FROM {T} WHERE {MONTH}")],
-    10, d.y, w=5, unit="currencyUSD", decimals=2, graph=False, steps=[("green", None), ("orange", 7), ("red", 10)],
-    desc="크레딧 차감 전 전체 사용액의 월 환산. $10 크레딧과 비교"))
+# 실제 청구액(BigQuery)은 결제 대시보드에만 — 홈은 공개 대시보드라 조회마다 BigQuery 쿼리가 돌지 않게 Prometheus 추정만 (2026-11-20)
+d.row("비용 (추정 — 실제 청구액은 결제 대시보드)")
 d.add(stat(PROM, "추정 월 비용 (USD)", [prom(
     "(avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace!~\"kube-system|gke-.*\"})"
-    " * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) * $cpu_rate"
+    " * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) * 0.0133"
     " + avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace!~\"kube-system|gke-.*\"})"
-    " * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) / 2^30 * $mem_rate) * 730")],
-    15, d.y, w=5, unit="currencyUSD", decimals=2, graph=False, steps=[("green", None), ("orange", 7), ("red", 10)],
-    desc="파드 requests × Spot 단가, 최근 7일 평균 (비용 & 용량 대시보드와 동일)"))
-d.add(stat(PROM, "수집 시계열", [prom('sum(scrape_samples_post_metric_relabeling)')], 20, d.y, w=4, decimals=0, graph=True,
+    " * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) / 2^30 * 0.0014767) * 730")],
+    0, d.y, w=12, unit="currencyUSD", decimals=2, graph=False, steps=[("green", None), ("orange", 7), ("red", 10)],
+    desc="파드 requests × Spot 단가, 최근 7일 평균 (비용 & 용량 대시보드와 동일). 월 $10 크레딧과 비교"))
+d.add(stat(PROM, "수집 시계열", [prom('sum(scrape_samples_post_metric_relabeling)')], 12, d.y, w=12, decimals=0, graph=True,
            desc="keep 리스트로 대시보드가 쓰는 지표만 수집 (약 5.2만 → 4~5천)"))
 d.y += 4
 
@@ -111,13 +100,9 @@ d.add(bargauge(PROM, "메모리 사용률 상위 5 (사용 / limit)",
                desc="limit에 가까운 컨테이너. 지속적으로 주황·빨강이면 requests/limit 상향 검토"))
 d.y += 6
 
-templating = [
-    {"name": "budget_krw", "type": "constant", "hide": 2, "query": "15000"},
-    {"name": "cpu_rate", "type": "constant", "hide": 2, "query": "0.0133"},
-    {"name": "mem_rate", "type": "constant", "hide": 2, "query": "0.0014767"},
-]
+# 단가(USD, Spot): CPU 0.0133/vCPU-시간, 메모리 0.0014767/GiB-시간 — 공개 대시보드는 템플릿 변수를 치환하지 않아 쿼리에 직접 기입
 dash = base("lab-home", "Lab · 홈", "GKE Autopilot 모니터링 랩 요약 — 비용·클러스터·운영 핵심 지표와 대시보드 바로가기",
-            ["lab", "home"], d.panels, templating=templating, time_from="now-24h", refresh="5m")
+            ["lab", "home"], d.panels, time_from="now-24h", refresh="5m")
 dash["links"] = [{"title": "Lab 대시보드", "type": "dashboards", "tags": ["lab"], "asDropdown": True,
                   "includeVars": False, "keepTime": True, "icon": "external link", "targetBlank": False}]
 write(dash, sys.argv[1])

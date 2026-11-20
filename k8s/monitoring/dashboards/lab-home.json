@@ -17,26 +17,7 @@
     "to": "now"
   },
   "templating": {
-    "list": [
-      {
-        "name": "budget_krw",
-        "type": "constant",
-        "hide": 2,
-        "query": "15000"
-      },
-      {
-        "name": "cpu_rate",
-        "type": "constant",
-        "hide": 2,
-        "query": "0.0133"
-      },
-      {
-        "name": "mem_rate",
-        "type": "constant",
-        "hide": 2,
-        "query": "0.0014767"
-      }
-    ]
+    "list": []
   },
   "annotations": {
     "list": []
@@ -53,13 +34,13 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "### GKE Autopilot 모니터링 랩\n월 **$10 크레딧 안에서** 운영하는 GKE Autopilot(Spot Pod) + kube-prometheus-stack 실습 환경입니다.\nTerraform(GCP·Cloudflare·AWS) · Helm · Cloudflare Tunnel · 예산 초과 자동 차단 · GitHub Actions CI · Argo CD · **Atlantis(채팅 승인 terraform CI/CD)**\n\n| 대시보드 | 내용 |\n|---|---|\n| [💰 실제 청구액](/d/lab-billing) | BigQuery 결제 데이터: 사용액·크레딧·월말 예상, 추정 vs 실제 |\n| [📊 비용 & 용량](/d/lab-cost-capacity) | 파드 requests 기반 비용 추정, rightsizing |\n| [⚙️ 클러스터 성능](/d/lab-cluster-performance) | 노드·워크로드·PV·API 서버·Prometheus |\n| [🛠️ 운영 & 외부 접속](/d/lab-ops) | 가동 타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |\n| [🚀 Argo CD (GitOps)](/d/lab-argocd) | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |\n| [🔐 OpenBao (임시 자격 발급)](/d/lab-openbao) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동) |\n| [🎯 SLO (lab-api 에러 버짓)](/d/lab-slo) | 가용성·지연 SLO, 다중 창 소진 속도, canary 배포 파드 템플릿별 비교 |\n| [🛡️ Kyverno 정책 결과](/d/lab-kyverno) | 정책별 통과·위반, 위반 목록, 검사 범위 (CI 차단 + 클러스터 Audit) |\n| [🏗️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 |\n| [🐙 GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 |\n"
+        "content": "### GKE Autopilot 모니터링 랩\n월 **$10 크레딧 안에서** 운영하는 GKE Autopilot(Spot Pod) + kube-prometheus-stack 실습 환경입니다.\nTerraform(GCP·Cloudflare·AWS) · Helm · Cloudflare Tunnel · 예산 초과 자동 차단 · GitHub Actions CI · Argo CD · **Atlantis(채팅 승인 terraform CI/CD)**\n\n<!-- 링크: 공개 대시보드(로그인 없이 보기)는 /public-dashboards/<토큰>, 🔒 표시는 Grafana 로그인 필요 -->\n| 대시보드 | 내용 |\n|---|---|\n| [💰 실제 청구액](/d/lab-billing) | BigQuery 결제 데이터: 사용액·크레딧·월말 예상, 추정 vs 실제 · 🔒 로그인 필요 |\n| [📊 비용 & 용량](/public-dashboards/a09908b0e38f47fbb648488e237b75aa) | 파드 requests 기반 비용 추정, rightsizing |\n| [⚙️ 클러스터 성능](/public-dashboards/ac65828bd89148c59bcaf118c369036f) | 노드·워크로드·PV·API 서버·Prometheus |\n| [🛠️ 운영 & 외부 접속](/public-dashboards/3a0bd1a4324948549c4dd22914ea98b7) | 가동 타임라인, CronJob, Spot 노드 교체, Cloudflare Tunnel |\n| [🚀 Argo CD (GitOps)](/public-dashboards/9e7ef30208b0421fa75d746d4dac9b15) | 앱 Sync/Health, 동기화 이력·소요 시간, 컨트롤러 캐시, Git, 리소스 |\n| [🔐 OpenBao (임시 자격 발급)](/public-dashboards/0b2da8aeef8a41db9f8d37669b224300) | 역할 없는 서버·담당자 로그인, AWS STS 발급, 살아 있는 자격, 감사 (필요할 때만 가동) |\n| [🎯 SLO (lab-api 에러 버짓)](/public-dashboards/046c7b20304446bd81f9d34d062ad35b) | 가용성·지연 SLO, 다중 창 소진 속도, canary 배포 파드 템플릿별 비교 |\n| [🛡️ Kyverno 정책 결과](/public-dashboards/d573f5f583d84b8e8480259011de3ffe) | 정책별 통과·위반, 위반 목록, 검사 범위 (CI 차단 + 클러스터 Audit) |\n| [🏗️ Terraform CI/CD](/d/lab-github) | Atlantis 실시간(plan·apply·가동 시간) + PR·Actions·사후/교차 감사·정책 위반 이력 · 🔒 로그인 필요 |\n| [🐙 GitHub 사용량](/d/lab-github-usage) | GitHub Free 무료 한도 대비 Actions 분·저장 공간·청구 예정·API 한도 · 🔒 로그인 필요 |\n"
       },
       "id": 1
     },
     {
       "type": "row",
-      "title": "비용 (이번 달)",
+      "title": "비용 (추정 — 실제 청구액은 결제 대시보드)",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -72,224 +53,16 @@
     },
     {
       "type": "stat",
-      "title": "순 청구액",
-      "datasource": {
-        "type": "grafana-bigquery-datasource",
-        "uid": "bigquery-billing"
-      },
-      "description": "크레딧 차감 후 실제 결제될 금액 (결제 데이터는 1~2일 지연)",
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 0,
-        "y": 13
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyKRW",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5000
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-bigquery-datasource",
-            "uid": "bigquery-billing"
-          },
-          "refId": "A",
-          "rawSql": "SELECT IFNULL(ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
-          "rawQuery": true,
-          "editorMode": "code",
-          "format": 1,
-          "location": "US"
-        }
-      ],
-      "id": 3
-    },
-    {
-      "type": "gauge",
-      "title": "예산 대비 (₩$budget_krw)",
-      "datasource": {
-        "type": "grafana-bigquery-datasource",
-        "uid": "bigquery-billing"
-      },
-      "description": "100%면 budget-guard가 워크로드를 자동으로 0으로 내림",
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 5,
-        "y": 13
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.5
-              },
-              {
-                "color": "red",
-                "value": 0.9
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdMarkers": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-bigquery-datasource",
-            "uid": "bigquery-billing"
-          },
-          "refId": "A",
-          "rawSql": "SELECT IFNULL(SAFE_DIVIDE(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c WHERE c.type = 'FREE_TIER'), 0)), $budget_krw), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
-          "rawQuery": true,
-          "editorMode": "code",
-          "format": 1,
-          "location": "US"
-        }
-      ],
-      "id": 4
-    },
-    {
-      "type": "stat",
-      "title": "월말 예상 (할인 전, USD)",
-      "datasource": {
-        "type": "grafana-bigquery-datasource",
-        "uid": "bigquery-billing"
-      },
-      "description": "크레딧 차감 전 전체 사용액의 월 환산. $10 크레딧과 비교",
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 10,
-        "y": 13
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyUSD",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 7
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-bigquery-datasource",
-            "uid": "bigquery-billing"
-          },
-          "refId": "A",
-          "rawSql": "SELECT IFNULL(ROUND(SAFE_DIVIDE(SUM(cost / currency_conversion_rate), TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH, 'America/Los_Angeles'), SECOND) / (86400 * EXTRACT(DAY FROM LAST_DAY(CURRENT_DATE('America/Los_Angeles'))))), 2), 0) AS value FROM `billing_export.gcp_billing_export_v1_*` WHERE invoice.month = FORMAT_TIMESTAMP('%Y%m', CURRENT_TIMESTAMP(), 'America/Los_Angeles')",
-          "rawQuery": true,
-          "editorMode": "code",
-          "format": 1,
-          "location": "US"
-        }
-      ],
-      "id": 5
-    },
-    {
-      "type": "stat",
       "title": "추정 월 비용 (USD)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "파드 requests × Spot 단가, 최근 7일 평균 (비용 & 용량 대시보드와 동일)",
+      "description": "파드 requests × Spot 단가, 최근 7일 평균 (비용 & 용량 대시보드와 동일). 월 $10 크레딧과 비교",
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 15,
+        "w": 12,
+        "x": 0,
         "y": 13
       },
       "fieldConfig": {
@@ -338,14 +111,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) * $cpu_rate + avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) / 2^30 * $mem_rate) * 730",
+          "expr": "(avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) * 0.0133 + avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) / 2^30 * 0.0014767) * 730",
           "legendFormat": "",
           "refId": "A",
           "range": false,
           "instant": true
         }
       ],
-      "id": 6
+      "id": 3
     },
     {
       "type": "stat",
@@ -357,8 +130,8 @@
       "description": "keep 리스트로 대시보드가 쓰는 지표만 수집 (약 5.2만 → 4~5천)",
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 20,
+        "w": 12,
+        "x": 12,
         "y": 13
       },
       "fieldConfig": {
@@ -406,7 +179,7 @@
           "instant": false
         }
       ],
-      "id": 7
+      "id": 4
     },
     {
       "type": "row",
@@ -419,7 +192,7 @@
         "x": 0,
         "y": 17
       },
-      "id": 8
+      "id": 5
     },
     {
       "type": "stat",
@@ -480,7 +253,7 @@
           "instant": false
         }
       ],
-      "id": 9
+      "id": 6
     },
     {
       "type": "stat",
@@ -541,7 +314,7 @@
           "instant": false
         }
       ],
-      "id": 10
+      "id": 7
     },
     {
       "type": "stat",
@@ -606,7 +379,7 @@
           "instant": true
         }
       ],
-      "id": 11
+      "id": 8
     },
     {
       "type": "stat",
@@ -671,7 +444,7 @@
           "instant": true
         }
       ],
-      "id": 12
+      "id": 9
     },
     {
       "type": "stat",
@@ -740,7 +513,7 @@
           "instant": false
         }
       ],
-      "id": 13
+      "id": 10
     },
     {
       "type": "stat",
@@ -809,7 +582,7 @@
           "instant": false
         }
       ],
-      "id": 14
+      "id": 11
     },
     {
       "type": "row",
@@ -822,7 +595,7 @@
         "x": 0,
         "y": 22
       },
-      "id": 15
+      "id": 12
     },
     {
       "type": "stat",
@@ -891,7 +664,7 @@
           "instant": false
         }
       ],
-      "id": 16
+      "id": 13
     },
     {
       "type": "stat",
@@ -952,7 +725,7 @@
           "instant": false
         }
       ],
-      "id": 17
+      "id": 14
     },
     {
       "type": "stat",
@@ -1021,7 +794,7 @@
           "instant": false
         }
       ],
-      "id": 18
+      "id": 15
     },
     {
       "type": "stat",
@@ -1089,7 +862,7 @@
           "instant": true
         }
       ],
-      "id": 19
+      "id": 16
     },
     {
       "type": "stat",
@@ -1168,7 +941,7 @@
           "instant": true
         }
       ],
-      "id": 20
+      "id": 17
     },
     {
       "type": "stat",
@@ -1229,7 +1002,7 @@
           "instant": true
         }
       ],
-      "id": 21
+      "id": 18
     },
     {
       "type": "row",
@@ -1242,7 +1015,7 @@
         "x": 0,
         "y": 27
       },
-      "id": 22
+      "id": 19
     },
     {
       "type": "stat",
@@ -1320,7 +1093,7 @@
           "instant": true
         }
       ],
-      "id": 23
+      "id": 20
     },
     {
       "type": "stat",
@@ -1389,7 +1162,7 @@
           "instant": true
         }
       ],
-      "id": 24
+      "id": 21
     },
     {
       "type": "stat",
@@ -1458,7 +1231,7 @@
           "instant": true
         }
       ],
-      "id": 25
+      "id": 22
     },
     {
       "type": "bargauge",
@@ -1530,7 +1303,7 @@
           "instant": true
         }
       ],
-      "id": 26
+      "id": 23
     }
   ],
   "links": [

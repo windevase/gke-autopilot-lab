@@ -2,7 +2,8 @@
 import json, sys
 
 DS = {"type": "prometheus", "uid": "prometheus"}
-NS = 'namespace=~"$namespace"'
+# 공개 대시보드는 템플릿 변수를 치환하지 않음 → 네임스페이스 고정 (2026-11-20, 이전엔 네임스페이스 선택 변수)
+NS = 'namespace="monitoring"'
 panels = []
 _id = [0]
 
@@ -143,7 +144,7 @@ panels[-1]["transformations"][1]["options"]["excludeByName"]["Value #A"] = True
 y += 6
 
 # ---------------- 3. 워크로드 ----------------
-row("워크로드 ($namespace)", y); y += 1
+row("워크로드 (monitoring)", y); y += 1
 sel = ', ' + NS
 ts("파드별 CPU 사용", [tgt(CPU_M.format(by="pod", sel=sel), "{{pod}}")], 0, y, w=12, unit="suffix:m", minv=0)
 ts("파드별 메모리 사용 (working set)", [tgt(MEM.format(by="pod", sel=sel), "{{pod}}")], 12, y, w=12, unit="bytes", minv=0)
@@ -230,13 +231,7 @@ dashboard = {
     "graphTooltip": 1,
     "refresh": "1m",
     "time": {"from": "now-6h", "to": "now"},
-    "templating": {"list": [{
-        "name": "namespace", "label": "네임스페이스", "type": "query", "datasource": DS,
-        "query": {"query": "label_values(kube_pod_info, namespace)", "refId": "ns"},
-        "definition": "label_values(kube_pod_info, namespace)",
-        "refresh": 2, "multi": True, "includeAll": True, "allValue": ".*",
-        "current": {"selected": True, "text": ["monitoring"], "value": ["monitoring"]},
-        "sort": 1}]},
+    "templating": {"list": []},
     "annotations": {"list": []},
     "panels": panels,
 }

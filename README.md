@@ -96,19 +96,21 @@ flowchart LR
 
 기본 대시보드는 모두 제거하고, 필요한 것만 **코드로** 관리합니다 (아래 [Dashboard as Code](#dashboard-as-code)).
 
+대시보드 이름을 누르면 **로그인 없이 실제 화면**을 볼 수 있습니다 (Grafana 공개 대시보드, 읽기 전용·시간 범위 고정). Grafana 는 비용을 줄이려고 **평일 10~20시(KST)에만** 켜 두므로, 그 밖의 시간에는 열리지 않습니다. 🔒 는 비공개입니다 — 실제 청구액(조회마다 BigQuery 쿼리 실행)과 private 저장소 PR·청구 정보가 보이는 GitHub 대시보드 2개.
+
 | 대시보드 | 데이터 | 내용 |
 |---|---|---|
-| **홈** | BigQuery + Prometheus | 로그인 첫 화면. 순 청구액·예산 대비·월말 예상, 클러스터·터널·자동 차단 상태 요약과 대시보드 바로가기 |
-| **비용 & 용량** | Prometheus | 파드 requests 기반 월 비용 추정, 컨테이너별 사용률(rightsizing), Prometheus 상태 |
-| **클러스터 성능** | Prometheus | 노드·워크로드(CPU·메모리·스로틀링·네트워크·디스크), PV, API 서버 요청·지연, 수집 상태 |
-| **운영 & 외부 접속** | Prometheus | 워크로드 가동 타임라인(오프아워·자동 차단 효과), CronJob 상태, Spot 노드 교체 이력, Cloudflare Tunnel 요청·오류·RTT·트래픽 |
-| **실제 청구액** | BigQuery | 이번 달 사용액·크레딧·순 청구액·예산 대비·월말 예상, **추정 vs 실제**, 서비스·SKU별 상세 |
-| **Argo CD (GitOps)** | Prometheus | 앱별 Sync/Health 현재 상태·타임라인, 동기화 횟수·결과·소요 시간, reconcile 시간, 컨트롤러 캐시 객체 수(메모리와 직결), Git 요청, 리소스·재시작·OOM |
-| **Terraform CI/CD** | Prometheus + GitHub | 사후·교차 감사 마지막 결과, Atlantis 가동 시간·비용(7일), plan·apply 실행 결과(24시간), PR 리드타임, 워크플로 결과, 정책 위반 이슈 |
-| **GitHub 사용량** | GitHub REST (Infinity) | GitHub Free 무료 한도 대비 Actions 분(Linux 환산)·저장 공간(GB-시간)·월말 예상·청구 예정, 캐시, API 요청 한도 |
-| **SLO (lab-api 에러 버짓)** | Prometheus | SLO별 7일 SLI·남은 에러 버짓·현재/기간 소진 속도·경보 상태, 창별(5m·1h·6h·1d) 소진 속도, RED(요청·오류율·p50/95/99), canary 파드 템플릿별 요청·소진 속도 |
-| **Kyverno 정책 결과** | Prometheus (kube-state-metrics) | 정책 보고서(PolicyReport)를 KSM `customResourceState` 로 지표화: 위반·경고·통과 수, 정책별 결과, 위반 목록(리소스·규칙·메시지), 네임스페이스·리소스 종류별 검사 범위, 마지막 스캔 경과. 보고서는 Kyverno 가 꺼진 시간에도 남아 24시간 조회 가능 |
-| **OpenBao (임시 자격 발급)** | Prometheus | 봉인 상태·가동 시간, 인증 방식별 로그인(AppRole·OIDC)·AppRole 로그인 실패(추정), AWS STS 발급·살아 있는 자격, 경로별 요청·처리 시간, 감사 로그 실패, Raft·리소스 (필요할 때만 가동 → 꺼진 시간은 비어 있음) |
+| [**홈**](https://grafana.bility.academy/public-dashboards/e320007a0111466abae9b70a894fc43e) | Prometheus | 첫 화면. 추정 월 비용, 클러스터·터널·자동 차단 상태 요약과 대시보드 바로가기 (실제 청구액은 🔒 결제 대시보드에만) |
+| [**비용 & 용량**](https://grafana.bility.academy/public-dashboards/a09908b0e38f47fbb648488e237b75aa) | Prometheus | 파드 requests 기반 월 비용 추정, 컨테이너별 사용률(rightsizing), Prometheus 상태 |
+| [**클러스터 성능**](https://grafana.bility.academy/public-dashboards/ac65828bd89148c59bcaf118c369036f) | Prometheus | 노드·워크로드(CPU·메모리·스로틀링·네트워크·디스크), PV, API 서버 요청·지연, 수집 상태 |
+| [**운영 & 외부 접속**](https://grafana.bility.academy/public-dashboards/3a0bd1a4324948549c4dd22914ea98b7) | Prometheus | 워크로드 가동 타임라인(오프아워·자동 차단 효과), CronJob 상태, Spot 노드 교체 이력, Cloudflare Tunnel 요청·오류·RTT·트래픽 |
+| **실제 청구액** 🔒 | BigQuery | 이번 달 사용액·크레딧·순 청구액·예산 대비·월말 예상, **추정 vs 실제**, 서비스·SKU별 상세 |
+| [**Argo CD (GitOps)**](https://grafana.bility.academy/public-dashboards/9e7ef30208b0421fa75d746d4dac9b15) | Prometheus | 앱별 Sync/Health 현재 상태·타임라인, 동기화 횟수·결과·소요 시간, reconcile 시간, 컨트롤러 캐시 객체 수(메모리와 직결), Git 요청, 리소스·재시작·OOM |
+| **Terraform CI/CD** 🔒 | Prometheus + GitHub | 사후·교차 감사 마지막 결과, Atlantis 가동 시간·비용(7일), plan·apply 실행 결과(24시간), PR 리드타임, 워크플로 결과, 정책 위반 이슈 |
+| **GitHub 사용량** 🔒 | GitHub REST (Infinity) | GitHub Free 무료 한도 대비 Actions 분(Linux 환산)·저장 공간(GB-시간)·월말 예상·청구 예정, 캐시, API 요청 한도 |
+| [**SLO (lab-api 에러 버짓)**](https://grafana.bility.academy/public-dashboards/046c7b20304446bd81f9d34d062ad35b) | Prometheus | SLO별 7일 SLI·남은 에러 버짓·현재/기간 소진 속도·경보 상태, 창별(5m·1h·6h·1d) 소진 속도, RED(요청·오류율·p50/95/99), canary 파드 템플릿별 요청·소진 속도 |
+| [**Kyverno 정책 결과**](https://grafana.bility.academy/public-dashboards/d573f5f583d84b8e8480259011de3ffe) | Prometheus (kube-state-metrics) | 정책 보고서(PolicyReport)를 KSM `customResourceState` 로 지표화: 위반·경고·통과 수, 정책별 결과, 위반 목록(리소스·규칙·메시지), 네임스페이스·리소스 종류별 검사 범위, 마지막 스캔 경과. 보고서는 Kyverno 가 꺼진 시간에도 남아 24시간 조회 가능 |
+| [**OpenBao (임시 자격 발급)**](https://grafana.bility.academy/public-dashboards/0b2da8aeef8a41db9f8d37669b224300) | Prometheus | 봉인 상태·가동 시간, 인증 방식별 로그인(AppRole·OIDC)·AppRole 로그인 실패(추정), AWS STS 발급·살아 있는 자격, 경로별 요청·처리 시간, 감사 로그 실패, Raft·리소스 (필요할 때만 가동 → 꺼진 시간은 비어 있음) |
 
 ## Dashboard as Code
 

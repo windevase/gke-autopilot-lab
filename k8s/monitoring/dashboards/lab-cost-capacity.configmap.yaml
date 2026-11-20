@@ -4,7 +4,7 @@ data:
     {
       "uid": "lab-cost-capacity",
       "title": "Lab · 비용 & 용량 (Autopilot Spot)",
-      "description": "GKE Autopilot은 파드 requests 기준 과금. 시스템 네임스페이스(kube-system, gke-*)는 과금 제외. 단가는 대시보드 변수(cpu_rate/mem_rate/pd_rate)로 관리.",
+      "description": "GKE Autopilot은 파드 requests 기준 과금. 시스템 네임스페이스(kube-system, gke-*)는 과금 제외. 단가는 대시보드 변수(cpu_rate/mem_rate/pd_rate)로 관리. 단가(USD, Spot): CPU 0.0133/vCPU-시간, 메모리 0.0014767/GiB-시간, PD 0.04/GB-월 — 공개 대시보드라 쿼리에 직접 기입",
       "tags": [
         "lab",
         "cost",
@@ -20,57 +20,7 @@ data:
       },
       "schemaVersion": 39,
       "templating": {
-        "list": [
-          {
-            "name": "namespace",
-            "label": "Namespace (과금 대상)",
-            "type": "query",
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "query": {
-              "query": "label_values(kube_pod_info, namespace)",
-              "refId": "ns"
-            },
-            "regex": "/^(?!kube-system$|gke-).*/",
-            "includeAll": true,
-            "multi": true,
-            "allValue": ".*",
-            "current": {
-              "selected": true,
-              "text": [
-                "All"
-              ],
-              "value": [
-                "$__all"
-              ]
-            },
-            "refresh": 2,
-            "sort": 1
-          },
-          {
-            "name": "cpu_rate",
-            "label": "Spot vCPU $/h",
-            "type": "constant",
-            "query": "0.0133",
-            "hide": 2
-          },
-          {
-            "name": "mem_rate",
-            "label": "Spot GiB $/h",
-            "type": "constant",
-            "query": "0.0014767",
-            "hide": 2
-          },
-          {
-            "name": "pd_rate",
-            "label": "pd-standard $/GiB-month",
-            "type": "constant",
-            "query": "0.04",
-            "hide": 2
-          }
-        ]
+        "list": []
       },
       "panels": [
         {
@@ -105,14 +55,14 @@ data:
             {
               "refId": "A",
               "legendFormat": "최근 7일 실가동",
-              "expr": "(avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) * $cpu_rate + avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) / 2^30 * $mem_rate) * 730 + (sum(max by (namespace,persistentvolumeclaim) (kube_persistentvolumeclaim_resource_requests_storage_bytes{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"})) or vector(0)) / 2^30 * $pd_rate",
+              "expr": "(avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) * 0.0133 + avg_over_time(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))[7d:10m]) / 2^30 * 0.0014767) * 730 + (sum(max by (namespace,persistentvolumeclaim) (kube_persistentvolumeclaim_resource_requests_storage_bytes{namespace=~\".+\",namespace!~\"kube-system|gke-.*\"})) or vector(0)) / 2^30 * 0.04",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
               "legendFormat": "24시간 가정 (상한)",
-              "expr": "(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1)) * $cpu_rate + sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1)) / 2^30 * $mem_rate) * 730 + (sum(max by (namespace,persistentvolumeclaim) (kube_persistentvolumeclaim_resource_requests_storage_bytes{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"})) or vector(0)) / 2^30 * $pd_rate",
+              "expr": "(sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1)) * 0.0133 + sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1)) / 2^30 * 0.0014767) * 730 + (sum(max by (namespace,persistentvolumeclaim) (kube_persistentvolumeclaim_resource_requests_storage_bytes{namespace=~\".+\",namespace!~\"kube-system|gke-.*\"})) or vector(0)) / 2^30 * 0.04",
               "instant": true,
               "range": false
             }
@@ -172,7 +122,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
+              "expr": "sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
               "instant": true,
               "range": false
             }
@@ -212,7 +162,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
+              "expr": "sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
               "instant": true,
               "range": false
             }
@@ -252,7 +202,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}[5m])) / sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\".+\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}[5m])) / sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
               "instant": true,
               "range": false
             }
@@ -308,7 +258,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}) / sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
+              "expr": "sum(container_memory_working_set_bytes{namespace=~\".+\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}) / sum(max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))",
               "instant": true,
               "range": false
             }
@@ -419,7 +369,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}[1h]))) or vector(0)",
+              "expr": "sum(max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}[1h]))) or vector(0)",
               "instant": true,
               "range": false
             }
@@ -472,7 +422,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "count(max by (namespace,pod,container) (max_over_time(kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}[24h])) == 1) or vector(0)",
+              "expr": "count(max by (namespace,pod,container) (max_over_time(kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}[24h])) == 1) or vector(0)",
               "instant": true,
               "range": false
             }
@@ -540,7 +490,7 @@ data:
               "refId": "A",
               "legendFormat": "{{container}}",
               "instant": true,
-              "expr": "sort_desc(max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}) / on(namespace,pod,container) max by (namespace,pod,container) (kube_pod_container_resource_limits{resource=\"memory\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}))"
+              "expr": "sort_desc(max by (namespace,pod,container) (container_memory_working_set_bytes{namespace=~\".+\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}) / on(namespace,pod,container) max by (namespace,pod,container) (kube_pod_container_resource_limits{resource=\"memory\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}))"
             }
           ],
           "fieldConfig": {
@@ -602,7 +552,7 @@ data:
               "refId": "A",
               "legendFormat": "{{container}}",
               "instant": true,
-              "expr": "sort_desc(sum by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}[5m])) / on(namespace,pod,container) max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}))"
+              "expr": "sort_desc(sum by (namespace,pod,container) (rate(container_cpu_usage_seconds_total{namespace=~\".+\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}[5m])) / on(namespace,pod,container) max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}))"
             }
           ],
           "fieldConfig": {
@@ -662,12 +612,12 @@ data:
             {
               "refId": "A",
               "legendFormat": "{{pod}}",
-              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"})"
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=~\".+\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"})"
             },
             {
               "refId": "B",
               "legendFormat": "{{pod}} 요청",
-              "expr": "sum by (pod) (max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))"
+              "expr": "sum by (pod) (max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"memory\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))"
             }
           ],
           "fieldConfig": {
@@ -733,12 +683,12 @@ data:
             {
               "refId": "A",
               "legendFormat": "{{pod}}",
-              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}[5m]))"
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=~\".+\",namespace!~\"kube-system|gke-.*\",container!=\"\",container!=\"POD\"}[5m]))"
             },
             {
               "refId": "B",
               "legendFormat": "{{pod}} 요청",
-              "expr": "sum by (pod) (max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))"
+              "expr": "sum by (pod) (max by (namespace,pod,container) (kube_pod_container_resource_requests{resource=\"cpu\",namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}) * on(namespace,pod) group_left() max by (namespace,pod) (kube_pod_status_phase{phase=\"Running\"} == 1))"
             }
           ],
           "fieldConfig": {
@@ -1033,7 +983,7 @@ data:
             {
               "refId": "A",
               "legendFormat": "{{pod}}",
-              "expr": "sum by (namespace,pod) (max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\",namespace!~\"kube-system|gke-.*\"}[1h]))) > 0"
+              "expr": "sum by (namespace,pod) (max by (namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\".+\",namespace!~\"kube-system|gke-.*\"}[1h]))) > 0"
             }
           ],
           "fieldConfig": {
